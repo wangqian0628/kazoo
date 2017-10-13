@@ -1073,14 +1073,13 @@ get_module(Category, Name) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec execute_control_request(kz_json:object(), state()) -> 'ok'.
+-spec execute_control_request(kz_json:object(), state()) -> 'ok' | {'ok', ne_binary()} | {'error', any()}.
 execute_control_request(Cmd, #state{node=Node
                                    ,call_id=CallId
                                    ,other_legs=OtherLegs
                                    }) ->
     kz_util:put_callid(CallId),
     Srv = self(),
-    %%    Insert = kz_json:get_atom_value(<<"Insert-At">>, Cmd, 'tail'),
 
     lager:debug("executing call command '~s' ~s"
                ,[kz_json:get_value(<<"Application-Name">>, Cmd)
