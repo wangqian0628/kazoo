@@ -1171,14 +1171,10 @@ which_call_leg(CmdLeg, OtherLegs, CallId) ->
 
 -spec maybe_send_error_resp(kz_term:ne_binary(), kz_json:object()) -> 'ok'.
 maybe_send_error_resp(CallId, Cmd) ->
+    AppName = kz_json:get_ne_binary_value(<<"Application-Name">>, Cmd),
     Msg = <<"Could not execute dialplan action: "
-            ,(kz_json:get_value(<<"Application-Name">>, Cmd))/binary
+            ,AppName/binary
           >>,
-    maybe_send_error_resp(CallId, Cmd, Msg).
-
--spec maybe_send_error_resp(kz_term:ne_binary(), kz_json:object(), kz_term:ne_binary()) -> 'ok'.
-maybe_send_error_resp(CallId, Cmd, Msg) ->
-    AppName = kz_json:get_value(<<"Application-Name">>, Cmd),
     maybe_send_error_resp(AppName, CallId, Cmd, Msg).
 
 -spec maybe_send_error_resp(kz_term:ne_binary(), kz_term:ne_binary(), kz_json:object(), kz_term:ne_binary()) -> 'ok'.
@@ -1190,7 +1186,7 @@ send_error_resp(CallId, Cmd) ->
     send_error_resp(CallId
                    ,Cmd
                    ,<<"Could not execute dialplan action: "
-                      ,(kz_json:get_value(<<"Application-Name">>, Cmd))/binary
+                      ,(kz_json:get_ne_binary_value(<<"Application-Name">>, Cmd))/binary
                     >>
                    ).
 
@@ -1205,7 +1201,7 @@ send_error_resp(CallId, Cmd, Msg) ->
 send_error_resp(CallId, Cmd, Msg, _Channel) ->
     %%    CCVs = error_ccvs(Channel),
 
-    Resp = [{<<"Msg-ID">>, kz_json:get_value(<<"Msg-ID">>, Cmd)}
+    Resp = [{<<"Msg-ID">>, kz_api:msg_id(Cmd)}
            ,{<<"Error-Message">>, Msg}
            ,{<<"Request">>, Cmd}
            ,{<<"Call-ID">>, CallId}
@@ -1263,7 +1259,7 @@ bind(Node, CallId) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec handle_replaced(kz_term:proplist(), state()) ->
+-spec handle_replaced(kz_json:object(), state()) ->
                              {'noreply', state()}.
 handle_replaced(JObj, #state{fetch_id=FetchId
                             ,node=_Node
@@ -1271,7 +1267,7 @@ handle_replaced(JObj, #state{fetch_id=FetchId
                             }=State) ->
     case kz_call_event:custom_channel_var(JObj, <<"Fetch-ID">>) of
         FetchId ->
-            ReplacedBy = kz_json:get_value(<<"Replaced-By">>, JObj),
+            ReplacedBy = kz_json:get_ne_binary_value(<<"Replaced-By">>, JObj),
             case ecallmgr_fs_channel:fetch(ReplacedBy) of
                 {'ok', _Channel} ->
                     %%                     OtherLeg = kz_json:get_value(<<"other_leg">>, Channel),
@@ -1290,7 +1286,7 @@ handle_replaced(JObj, #state{fetch_id=FetchId
             {'noreply', State}
     end.
 
--spec handle_transferee(kz_term:proplist(), state()) ->
+-spec handle_transferee(kz_json:object(), state()) ->
                                {'noreply', state()}.
 handle_transferee(JObj, #state{fetch_id=FetchId
                               ,node=_Node
@@ -1305,16 +1301,16 @@ handle_transferee(JObj, #state{fetch_id=FetchId
             {'noreply', State}
     end.
 
--spec handle_transferor(kz_term:proplist(), state()) ->
+-spec handle_transferor(kz_json:object(), state()) ->
                                {'noreply', state()}.
-handle_transferor(_Props, #state{fetch_id=_FetchId
-                                ,node=_Node
-                                ,call_id=_CallId
-                                }=State) ->
+handle_transferor(_JObj, #state{fetch_id=_FetchId
+                               ,node=_Node
+                               ,call_id=_CallId
+                               }=State) ->
     {'noreply', State}.
 
--spec handle_intercepted(atom(), kz_term:ne_binary(), kz_term:proplist()) -> 'ok'.
-handle_intercepted(_Node, _CallId, _Props) ->
+-spec handle_intercepted(atom(), kz_term:api_ne_binary(), kz_json:object()) -> 'ok'.
+handle_intercepted(_Node, _CallId, _JObj) ->
     %%     _ = case {props:get_value(<<"Core-UUID">>, Props)
     %%              ,props:get_value(?GET_CUSTOM_HEADER(<<"Core-UUID">>), Props)
     %%              }
