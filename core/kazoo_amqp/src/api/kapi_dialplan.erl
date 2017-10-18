@@ -1089,13 +1089,15 @@ error_v(JObj) -> error_v(kz_json:to_proplist(JObj)).
 
 %% Takes a generic API JObj, determines what type it is, and calls the appropriate validator
 
--spec publish_command(kz_term:ne_binary(), kz_term:api_terms()) -> 'ok'.
+-spec publish_command(kz_types:api_control_q(), kz_term:api_terms()) -> 'ok'.
 publish_command(CtrlQ, Prop) when is_list(Prop) ->
     publish_command(CtrlQ, Prop, props:get_value(<<"Application-Name">>, Prop));
 publish_command(CtrlQ, JObj) ->
     publish_command(CtrlQ, kz_json:to_proplist(JObj)).
 
--spec publish_command(kz_term:ne_binary(), kz_term:api_terms(), kz_term:ne_binary()) -> 'ok'.
+-spec publish_command(kz_types:api_control_q(), kz_term:api_terms(), kz_term:ne_binary()) -> 'ok'.
+publish_command({CtrlQ, CtrlP}, Prop, DPApp) ->
+    publish_command(CtrlQ, [{?KEY_DELIVER_TO_PID, CtrlP} | Prop], DPApp);
 publish_command(CtrlQ, Prop, DPApp) ->
     {'ok', Payload} = build_command(Prop, DPApp),
     amqp_util:callctl_publish(CtrlQ, Payload, ?DEFAULT_CONTENT_TYPE).
@@ -1125,11 +1127,13 @@ build_command(JObj, DPApp) ->
 
 %% sending DP actions to CallControl Queue
 
--spec publish_action(kz_term:ne_binary(), iodata()) -> 'ok'.
+-spec publish_action(kz_types:api_control_q(), iodata()) -> 'ok'.
 publish_action(Queue, JSON) ->
     publish_action(Queue, JSON, ?DEFAULT_CONTENT_TYPE).
 
--spec publish_action(kz_term:ne_binary(), iodata(), kz_term:ne_binary()) -> 'ok'.
+-spec publish_action(kz_types:api_control_q(), iodata(), kz_term:ne_binary()) -> 'ok'.
+publish_action({CtrlQ, CtrlP}, Prop, DPApp) ->
+    publish_action(CtrlQ, [{?KEY_DELIVER_TO_PID, CtrlP} | Prop], DPApp);
 publish_action(Queue, Payload, ContentType) ->
     amqp_util:callctl_publish(Queue, Payload, ContentType).
 
