@@ -29,8 +29,8 @@ handle(Data, Call) ->
             lager:info("completed successful bridge to the device"),
             cf_exe:stop(Call);
         {'fail', _}=Reason -> maybe_handle_bridge_failure(Reason, Call);
-        {'error', timeout} ->
-            lager:info("timeout bridging to the device"),
+        {'error', Reason} when is_atom(Reason) ->
+            lager:info("error '~s' bridging to the device", [Reason]),
             cf_exe:continue(Call);
         {'error', _R} ->
             lager:info("error bridging to device: ~s"
