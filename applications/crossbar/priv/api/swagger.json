@@ -1599,6 +1599,11 @@
                     "description": "Override the SIP Username",
                     "type": "string"
                 },
+                "strategy": {
+                    "default": "simultaneous",
+                    "description": "",
+                    "type": "string"
+                },
                 "suppress_clid": {
                     "description": "Suppress sending caller ID",
                     "type": "boolean"
@@ -10773,6 +10778,9 @@
                         "flush",
                         "now"
                     ],
+                    "type": "string"
+                },
+                "Reset": {
                     "type": "string"
                 }
             },
@@ -27870,10 +27878,10 @@
                             "prefix": "image"
                         },
                         {
-                            "prefix": "application/vnd.openxmlformats-officedocument."
+                            "prefix": "application/vnd.openxmlformats-officedocument"
                         },
                         {
-                            "prefix": "application/vnd.oasis.opendocument."
+                            "prefix": "application/vnd.oasis.opendocument"
                         },
                         "application/msword",
                         "application/vnd.ms-excel",
@@ -27881,7 +27889,10 @@
                     ],
                     "description": "fax allowed content types",
                     "items": {
-                        "type": "string"
+                        "type": [
+                            "string",
+                            "object"
+                        ]
                     },
                     "type": "array"
                 },
