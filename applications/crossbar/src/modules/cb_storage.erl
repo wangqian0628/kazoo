@@ -162,7 +162,10 @@ resource_exists(?PLANS_TOKEN, _PlanId) -> 'true'.
 %%--------------------------------------------------------------------
 -spec validate(cb_context:context()) -> cb_context:context().
 validate(Context) ->
-    validate_storage(set_scope(Context), cb_context:req_verb(Context)).
+    lager:notice("validate.error_code: ~p", [cb_context:resp_error_code(Context)]),
+    ReqVerb = cb_context:req_verb(Context),
+    Context1 = validate_storage(set_scope(Context), ReqVerb),
+    maybe_check_storage_credentials(Context1, ReqVerb).
 
 -spec validate(cb_context:context(), path_token()) -> cb_context:context().
 validate(Context, ?PLANS_TOKEN) ->
@@ -412,3 +415,62 @@ doc_id({'user', UserId, _AccountId}) -> UserId;
 doc_id({'reseller_plans', _AccountId}) -> 'undefined';
 doc_id({'reseller_plan', PlanId, _AccountId}) -> PlanId;
 doc_id(Context) -> doc_id(scope(Context)).
+
+-spec maybe_check_storage_credentials(cb_context:context(), ne_binary()) -> cb_context:context().
+maybe_check_storage_credentials(Context, ReqVerb) when ReqVerb =:= ?HTTP_PUT;
+                                                       ReqVerb =:= ?HTTP_POST;
+                                                       ReqVerb =:= ?HTTP_PATCH ->
+    lager:notice("error_code: ~p", [cb_context:resp_error_code(Context)]),
+    case cb_context:resp_status(Context) of
+      'success' ->
+        RespData = cb_context:resp_data(Context),
+        DbName = cb_context:account_db(Context),
+        DocId = doc_id(Context),
+        AName = <<"test_credentials_file.txt">>,
+        Contents = kz_binary:rand_hex(16),
+        Atts = kz_json:get_value(<<"attachments">>, RespData),
+        ContextRecordInfo =
+          lists:zip(record_info(fields, cb_context), tl(tuple_to_list(Context))),
+        error_logger:info_msg("ContextRecordInfo: ~p", [ContextRecordInfo]),
+        lager:notice("RespData: ~p", [RespData]),
+        lager:notice("Keys: ~p~nAtts: ~p", [kz_json:get_keys(RespData), Atts]),
+        kz_json:foldl(
+          fun(AttId, Att, ContextAcc) ->
+              Handler = kz_json:get_value(<<"handler">>, Att),
+              Settings = kz_json:to_map(kz_json:get_value(<<"settings">>, Att)),
+              AttHandler = kz_term:to_atom(<<"kz_att_", Handler/binary>>),
+              Fun = fun(BinKey, SettingsAcc) ->
+                        AtomKey = kz_term:to_atom(BinKey),
+                        SettingsAcc#{AtomKey => maps:get(BinKey, Settings)}
+                    end,
+              AttSettings = lists:foldl(Fun, #{} , maps:keys(Settings)),
+              Opts = [{'plan_override', #{'att_handler' => {AttHandler, AttSettings}}}],
+              case kz_datamgr:put_attachment(DbName, DocId, AName, Contents, Opts) of
+                  {ok, _} ->
+                      ContextAcc;
+                  {error, Reason} when is_tuple(Reason) ->
+                      lager:notice("error_code: ~p", [cb_context:resp_error_code(Context)]),
+                      NewReason = [kz_term:to_binary(Term) ||
+                                   Term <- tuple_to_list(Reason)],
+                      Property = kz_json:get_value(<<"name">>, Att, AttId),
+                      cb_context:add_validation_error([<<"attachments">>, Property]
+                                                     ,<<"invalid">>
+                                                     ,NewReason
+                                                     ,ContextAcc
+                                                     );
+                  {error, Reason} ->
+                      Property = kz_json:get_value(<<"name">>, Att, AttId),
+                      cb_context:add_validation_error([<<"attachments">>, Property]
+                                                     ,<<"invalid">>
+                                                     ,kz_json:to_binary(Reason)
+                                                     ,ContextAcc
+                                                     )
+              end
+          end,
+          Context,
+          Atts);
+      _ ->
+        Context
+    end;
+maybe_check_storage_credentials(Context, _ReqVerb) ->
+    Context.
