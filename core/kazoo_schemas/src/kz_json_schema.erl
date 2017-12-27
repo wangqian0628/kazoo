@@ -768,36 +768,35 @@ depreciated_validation_error(<<"account">>, <<"expired">>, Message, Options) ->
     build_validate_error([<<"account">>]
                         ,<<"expired">>
                         ,Message
-                        ,props:insert_values([{'error_code', 423}
-                                             ,{'error_message', <<"locked">>}
-                                             ]
-                                            ,Options
-                                            )
+                        ,props:set_values([{'error_code', 423}
+                                          ,{'error_message', <<"locked">>}
+                                          ]
+                                         ,Options
+                                         )
                         );
 depreciated_validation_error(<<"account">>, <<"disabled">>, Message, Options) ->
     build_validate_error([<<"account">>]
                         ,<<"disabled">>
                         ,Message
-                        ,props:insert_values([{'error_code', 423}
-                                             ,{'error_message', <<"locked">>}
-                                             ]
-                                            ,Options
-                                            )
+                        ,props:set_values([{'error_code', 423}
+                                          ,{'error_message', <<"locked">>}
+                                          ]
+                                         ,Options
+                                         )
                         );
 depreciated_validation_error(Property, Code, Message, Options) ->
     build_validate_error(Property, Code, Message
-                        ,insert_default_options(Options)
+                        ,set_default_options(Options)
                         ).
 
--spec insert_default_options(options()) -> options().
-insert_default_options(Options) ->
-    lager:notice("Inserting default options"),
-    props:insert_values([{'version', ?CURRENT_VERSION}
-                        ,{'error_code', 400}
-                        ,{'error_message', <<"invalid_request">>}
-                        ]
-                       ,Options
-                       ).
+-spec set_default_options(options()) -> options().
+set_default_options(Options) ->
+    props:set_values([{'version', ?CURRENT_VERSION}
+                     ,{'error_code', 400}
+                     ,{'error_message', <<"validation error">>}
+                     ]
+                    ,Options
+                    ).
 
 -spec build_validate_error(kz_json:path(), kz_term:ne_binary(), kz_json:object(), options()) ->
                                   validation_error().
