@@ -11,6 +11,8 @@
 
 -include("knm.hrl").
 
+-export([generate_js_classifiers/1]).
+
 -export([app_using/2]).
 -export([carrier_module_usage/0
         ,carrier_module_usage/1
@@ -202,12 +204,8 @@ refresh_numbers_db(_Thing) ->
 update_number_services_view(?MATCH_ACCOUNT_RAW(AccountId)) ->
     update_number_services_view(kz_util:format_account_db(AccountId));
 update_number_services_view(?MATCH_ACCOUNT_ENCODED(_)=AccountDb) ->
-    ClassifiersJObj = knm_converters:available_classifiers(), %%TODO: per-account classifiers.
-    Pairs = [{Classification, kz_json:get_value([Classification, <<"regex">>], ClassifiersJObj)}
-             || Classification <- kz_json:get_keys(ClassifiersJObj)
-            ],
-    {Classifications, Regexs} = lists:unzip(Pairs),
-    MapView = number_services_map(Classifications, Regexs),
+    FunMatchBlock = fun(Class) -> ["    resC['", Class, "'] = resM;"] end,
+    MapView = number_services_map(FunMatchBlock),
     RedView = number_services_red(),
     ViewName = <<"_design/numbers">>,
     View = case kz_datamgr:open_doc(AccountDb, ViewName) of
@@ -222,14 +220,14 @@ update_number_services_view(?MATCH_ACCOUNT_ENCODED(_)=AccountDb) ->
     case MapView =:= kz_json:get_ne_binary_value(PathMap, View)
         andalso RedView =:= kz_json:get_ne_binary_value(PathRed, View)
     of
-        true -> no_return;
-        false ->
+        'true' -> 'no_return';
+        'false' ->
             NewView = kz_json:set_values([{PathMap, MapView}
                                          ,{PathRed, RedView}
                                          ]
                                         ,View
                                         ),
-            true = kz_datamgr:db_view_update(AccountDb, [{ViewName, NewView}]),
+            'true' = kz_datamgr:db_view_update(AccountDb, [{ViewName, NewView}]),
             ?SUP_LOG_DEBUG("View updated for ~s!", [AccountDb])
     end.
 
@@ -353,7 +351,7 @@ migrate_unassigned_numbers(NumberDb, Offset) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
+-spec escape(ne_binary()) -> ne_binary().
 escape(?NE_BINARY=Bin0) ->
     StartSz = byte_size(Start= <<"<<">>),
     EndSz   = byte_size(End  = <<">>">>),
@@ -362,23 +360,17 @@ escape(?NE_BINARY=Bin0) ->
     <<Start:StartSz/binary, Escaped:SizeOfWhatIWant/binary, End:EndSz/binary>> = Bin,
     Escaped.
 
--spec number_services_map(ne_binaries(), ne_binaries()) -> ne_binary().
-number_services_map(Classifications, Regexs) ->
+-type js_match_block() :: fun((ne_binary()) -> iolist()).
+-spec number_services_map(js_match_block()) -> ne_binary().
+number_services_map(FunMatchBlock) ->
     iolist_to_binary(
       ["function(doc) {"
        "  if (doc.pvt_type != 'number' || doc.pvt_deleted) return;"
-       "  var e164 = doc._id;"
-       %% "log('+14157125234'.match(",escape(<<"\\d+">>),"));"
        "  var resM = {};"
        "  resM[doc.pvt_module_name] = 1;"
        "  var resC = {};"
-       "  if (false) return;"
-      ,[["  else if (e164.match(", escape(R), "))"
-         "    resC['", Class, "'] = resM;"
-        ]
-        || {Class, R} <- lists:zip(Classifications, Regexs)
-       ]
-      ,"  var resF = {};"
+       ,generate_js_classifiers(FunMatchBlock),
+       "  var resF = {};"
        "  var used = doc.pvt_features || {};"
        "  for (var feature in used)"
        "    if (used.hasOwnProperty(feature))"
@@ -386,6 +378,26 @@ number_services_map(Classifications, Regexs) ->
        "  emit(doc._id, {'classifications':resC, 'features':resF});"
        "}"
       ]).
+
+-spec generate_js_classifiers(js_match_block()) -> iolist().
+generate_js_classifiers(FunMatchBlock) ->
+    ClassifiersJObj = knm_converters:available_classifiers(), %%TODO: per-account classifiers.
+    Pairs = [{Classification, kz_json:get_value([Classification, <<"regex">>], ClassifiersJObj)} 
+             || Classification <- kz_json:get_keys(ClassifiersJObj)
+            ],
+    {Classifications, Regexs} = lists:unzip(Pairs),
+    generate_js_classifiers(Classifications, Regexs, FunMatchBlock).
+
+-spec generate_js_classifiers(ne_binaries(), ne_binaries(), js_match_block()) -> iolist().
+generate_js_classifiers(Classifications, Regexs, FunMatchBlock) ->
+    ["  var e164 = doc._id;"
+     "  if (false) return;"
+    ,[["  else if (e164.match(", escape(Regex), "))"
+       ,FunMatchBlock(Class)
+      ]
+      || {Class, Regex} <- lists:zip(Classifications, Regexs)
+     ]
+    ].
 
 -spec number_services_red() -> ne_binary().
 number_services_red() ->

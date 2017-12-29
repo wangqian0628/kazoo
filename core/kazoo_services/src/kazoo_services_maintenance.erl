@@ -11,6 +11,7 @@
 -export([credit/2]).
 -export([debit/2]).
 -export([refresh/0]).
+-export([refresh_account/1]).
 -export([reconcile/0, reconcile/1
         ,remove_orphaned_services/0
         ]).
@@ -113,6 +114,88 @@ admin_description(T) ->
 refresh() ->
     kz_datamgr:db_create(?KZ_SERVICES_DB),
     kz_datamgr:revise_docs_from_folder(?KZ_SERVICES_DB, 'kazoo_services', "views").
+
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%% maintenance function to refresh the account db view
+%% @end
+%%--------------------------------------------------------------------
+-spec refresh_account(ne_binary()) -> 'ok'.
+refresh_account(Account) ->
+    AccountDb = kz_util:format_account_db(Account),
+    NewView = js_design_doc(),
+    ViewName = <<"_design/services-new">>,
+    'true' = kz_datamgr:db_view_update(AccountDb, [{ViewName, NewView}]).
+
+-spec js_design_doc() -> kz_json:object().
+js_design_doc() ->
+    Quantify = [{<<"map">>, js_map_function()}
+               ,{<<"reduce">>, <<"_sum">>}
+               ],
+    Views = [{<<"quantify">>, kz_json:from_list(Quantify)}],
+    Props = [{<<"_id">>, <<"_design/services-new">>}
+            ,{<<"views">>, kz_json:from_list(Views)}
+            ],
+    kz_json:from_list(Props).
+
+-spec js_map_function() -> ne_binary().
+js_map_function() ->
+    FunMatchBlock = fun(Class) -> [" emit(['phone_numbers', '", Class, "'], 1);"] end,
+    iolist_to_binary(
+      ["function(doc) {"
+       "    if (doc.pvt_deleted) return;"
+       "    switch (doc.pvt_type || doc._id) {"
+       "        case 'user':"
+       "            emit(['users', doc.priv_level], 1);"
+       "            break;"
+       "        case 'device':"
+       "            emit(['devices', doc.device_type || 'sip_device'], 1);"
+       "            break;"
+       "        case 'limits':"
+       "            emit(['limits', 'twoway_trunks'], doc.twoway_trunks || 0);"
+       "            emit(['limits', 'inbound_trunks'], doc.inbound_trunks || 0);"
+       "            emit(['limits', 'outbound_trunks'], doc.outbound_trunks || 0);"
+       "            break;"
+       "        case 'whitelabel':"
+       "            emit(['branding', 'whitelabel'], 1);"
+       "            break;"
+       "        case 'apps_store':"
+       "            for (var index in doc.apps) {"
+       "                if (!doc.apps.hasOwnProperty(index)) {"
+       "                    continue;"
+       "                }"
+       "                switch (doc.apps[index].allowed_users) {"
+       "                    case 'all':"
+       "                        emit(['ui_apps', doc.apps[index].name], -1);"
+       "                        break;"
+       "                    case 'admins':"
+       "                        emit(['ui_apps', doc.apps[index].name], -2);"
+       "                        break;"
+       "                    case 'specific':"
+       "                        emit(['ui_apps', doc.apps[index].name], doc.apps[index].users.length);"
+       "                        break;"
+       "                }"
+       "            }"
+       "            break;"
+       "        case 'number':"
+       "            emit(['number_carriers', doc.pvt_module_name], 1);"
+       "            for (var index in doc.pvt_features || {}) {"
+       "                if (doc.pvt_features.hasOwnProperty(index)) {"
+       "                    emit(['number_services', index], 1);"
+       "                }"
+       "            }"
+       ,kazoo_number_manager_maintenance:generate_js_classifiers(FunMatchBlock),
+       "            break;"
+       "    }"
+       "    if (doc.billing) {"
+       "        for (index in doc.billing) {"
+       "            emit(['billing', index], doc.billing[index]);"
+       "        }"
+       "    }"
+       "}"
+      ]
+     ).
 
 %%--------------------------------------------------------------------
 %% @public
