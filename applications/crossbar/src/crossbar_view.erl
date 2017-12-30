@@ -2,9 +2,6 @@
 %%% @copyright (C) 2018, 2600Hz
 %%% @doc
 %%% @end
-%%% @contributors
-%%%   Roman Galeev
-%%%   Hesaam Farhang
 %%%-------------------------------------------------------------------
 -module(crossbar_view).
 
@@ -123,7 +120,6 @@
             ).
 
 %%--------------------------------------------------------------------
-%% @public
 %% @doc
 %% Equivalent of load/3, setting Options to an empty list.
 %% @end
@@ -133,7 +129,6 @@ load(Context, View) ->
     load(Context, View, []).
 
 %%--------------------------------------------------------------------
-%% @public
 %% @doc
 %% This function attempts to load the context with the results of a view
 %% run against the accounts database.
@@ -144,7 +139,6 @@ load(Context, View, Options) ->
     load_view(build_load_params(Context, View, Options), Context).
 
 %%--------------------------------------------------------------------
-%% @public
 %% @doc
 %% Equivalent of load/3, setting Options to an empty list.
 %% @end
@@ -154,7 +148,6 @@ load_range(Context, View) ->
     load_range(Context, View, []).
 
 %%--------------------------------------------------------------------
-%% @public
 %% @doc
 %% This function attempts to load the context with the timestamped
 %% results of a view run against the accounts database.
@@ -165,7 +158,6 @@ load_range(Context, View, Options) ->
     load_view(build_load_range_params(Context, View, Options), Context).
 
 %%--------------------------------------------------------------------
-%% @public
 %% @doc
 %% Equivalent of load_modb/3, setting Options to an empty list.
 %% @end
@@ -175,7 +167,6 @@ load_modb(Context, View) ->
     load_modb(Context, View, []).
 
 %%--------------------------------------------------------------------
-%% @public
 %% @doc
 %% This function attempts to load the context with the results of a view
 %% run against the account's MODBs.
@@ -186,7 +177,6 @@ load_modb(Context, View, Options) ->
     load_view(build_load_modb_params(Context, View, Options), Context).
 
 %%--------------------------------------------------------------------
-%% @public
 %% @doc
 %% Generates corssbar_view options map for querying view.
 %% @end
@@ -249,7 +239,6 @@ build_load_range_params(Context, View, Options) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @public
 %% @doc
 %% Generates corssbar_view options map for querying MODBs view.
 %% @end
@@ -267,10 +256,9 @@ build_load_modb_params(Context, View, Options) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @public
 %% @doc
 %% Build CouchDB view options. It sets start/end keys,
-%% direction and `include_docs` (if it's not using reduce) and removes
+%% direction and include_docs (if it's not using reduce) and removes
 %% CrossbarView Options.
 %%
 %% NOTE: Do not set start/end keys in your CrossbarView Options,
@@ -306,9 +294,8 @@ build_view_query(Options, Direction, StartKey, EndKey, HasQSFilter) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @public
 %% @doc
-%% Equivalent of `start_end_keys/3`, set direction
+%% Equivalent of "start_end_keys/3", set direction
 %% @end
 %%--------------------------------------------------------------------
 -spec start_end_keys(cb_context:context(), options()) -> range_keys().
@@ -316,10 +303,9 @@ start_end_keys(Context, Options) ->
     start_end_keys(Context, Options, direction(Context, Options)).
 
 %%--------------------------------------------------------------------
-%% @public
 %% @doc
 %% Find start/end keys based on direction.
-%% If `start_key` or `end_key` is present in the request they will be
+%% If start_key or end_key is present in the request they will be
 %% used used instead.
 %%
 %% See get_key_maps/2 to find out possible key map options.
@@ -346,10 +332,9 @@ start_end_keys(Context, Options, Direction) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @public
 %% @doc
-%% Equivalent of `ranged_start_end_keys/5`, find time ranges and direction
-%% and pass them to `ranged_start_end_keys/5`.
+%% Equivalent of ranged_start_end_keys/5, find time ranges and direction
+%% and pass them to ranged_start_end_keys/5.
 %% @end
 %%--------------------------------------------------------------------
 -spec ranged_start_end_keys(cb_context:cb_context(), options()) -> range_keys().
@@ -359,10 +344,9 @@ ranged_start_end_keys(Context, Options) ->
     ranged_start_end_keys(Context, Options, Direction, StartTime, EndTime).
 
 %%--------------------------------------------------------------------
-%% @public
 %% @doc
 %% Find start/end keys based on requested time range and direction.
-%% If `start_key` or `end_key` is present in the request it will be
+%% If start_key or end_key is present in the request it will be
 %% used used instead. Otherwise the keys will built by key map options.
 %%
 %% See get_range_key_maps/1 to find out possible key map options.
@@ -388,7 +372,6 @@ ranged_start_end_keys(Context, Options, Direction, StartTime, EndTime) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @public
 %% @doc
 %% Suffix the Timestamp to the provided key map option. Useful to use
 %% generate the keys like [TS, InteractionId] for the end key in
@@ -405,7 +388,6 @@ suffix_key_fun(K) when is_list(K) -> fun(Ts) -> [Ts | K] end;
 suffix_key_fun(K) when is_function(K, 1) -> K.
 
 %%--------------------------------------------------------------------
-%% @public
 %% @doc
 %% Equivalent to direction/2, setting Options to an empty list.
 %% @end
@@ -415,10 +397,9 @@ direction(Context) ->
     direction(Context, []).
 
 %%--------------------------------------------------------------------
-%% @public
 %% @doc
 %% Find view sort direction from CrossbarView Options or request
-%% query string. Default to `descending`.
+%% query string. Default to descending.
 %% @end
 %%--------------------------------------------------------------------
 -spec direction(cb_context:context(), options()) -> direction().
@@ -432,7 +413,6 @@ direction(Context, Options) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @public
 %% @doc
 %% Equivalent to time_range/2, setting Options to an empty list.
 %% @end
@@ -441,18 +421,17 @@ direction(Context, Options) ->
 time_range(Context) -> time_range(Context, []).
 
 %%--------------------------------------------------------------------
-%% @public
 %% @doc
 %% Get view lookup time range from request or CrossbarView Options or
 %% return default range based on system configuration(maximum range).
 %%
-%% Start time (`created_from`) should always be prior to end time (`created_to).
+%% Start time (created_from) should always be prior to end time (created_to).
 %%
 %% Possible option:
-%%   - `max_range`: Maximum range allowed
-%%   - `range_key`: the key name to look values (created, modified or ...)
-%%   - `{RANGE_KEY}_from`: start time
-%%   - `{RANGE_KEY}_to`: end time
+%%   - max_range: Maximum range allowed
+%%   - range_key: the key name to look values (created, modified or ...)
+%%   - {RANGE_KEY}_from: start time
+%%   - {RANGE_KEY}_to: end time
 %% @end
 %%--------------------------------------------------------------------
 -spec time_range(cb_context:context(), options()) -> time_range() | cb_context:context().
@@ -468,10 +447,9 @@ time_range(Context, Options, Key) ->
     time_range(Context, MaxRange, Key, RangeFrom, RangeTo).
 
 %%--------------------------------------------------------------------
-%% @public
 %% @doc
 %% Checks whether or not end time is prior to start time. Returns a ranged
-%% tuple `{start_time, end_time}` or `context` with validation error.
+%% tuple {start_time, end_time} or context with validation error.
 %% @end
 %%--------------------------------------------------------------------
 -spec time_range(cb_context:context(), pos_integer(), kz_term:ne_binary(), pos_integer(), pos_integer()) ->
@@ -543,7 +521,7 @@ load_view(ContextError, _) ->
 %% @doc
 %% Check page size is exhausted or shall we continue querying same
 %% database (if query is chunk), otherwise go to next database.
-%% It sets `total_queried` after figure out what to do.
+%% It sets total_queried after figure out what to do.
 %% @end
 %%--------------------------------------------------------------------
 -spec next_chunk(map()) -> map().
@@ -633,18 +611,18 @@ chunk_map_roll_in(#{last_key := OldLastKey}=ChunkMap
 %% @doc
 %% Fold over databases and fetch result from each and count total result.
 %% If pagination is requested keeps track of last key.
-%% If `page_size` is not in the options, make unlimited get_results.
+%% If page_size is not in the options, make unlimited get_results.
 %%
 %% Based on chunked, limited or unlimited query, get the correct
 %% Limit for this loop (if it's limited query) and do the query.
 %%
 %% We use limit (limit + 1) to get an extra object (if available) to
-%% get last object's key as the `next_start_key`. If the page size
+%% get last object's key as the next_start_key. If the page size
 %% has been satisfied and the last key has been found, return the result,
 %% if the last key is not defined, query next DBs until DBs exhausted.
 %%
-%% If `chunked_size` is lower than sum of the `total_queried` and
-%% `current_db_length`, we set the chunk_size as the limit. In this
+%% If chunked_size is lower than sum of the total_queried and
+%% current_db_length, we set the chunk_size as the limit. In this
 %% case the db may return up to the limit size result, if the last_key
 %% is defined it means the db has more results to give, so we query
 %% the same db again, until the page size satisfied or no last_key is
@@ -888,7 +866,6 @@ add_paging(StartKey, PageSize, NextStartKey, JObj) ->
 %%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @public
 %% @doc
 %% Generates general corssbar_view options map for querying view.
 %% @end
@@ -1071,14 +1048,14 @@ map_keymap(_, _, ApiRangeKey) -> ApiRangeKey.
 %% will be used as the key.
 %%
 %% Possible key maps options:
-%%   - `range_keymap`: use this to map both start/end keys
-%%   - `range_start_keymap`: maps start key only
-%%   - `range_end_keymap`: maps end key only
+%%   - range_keymap: use this to map both start/end keys
+%%   - range_start_keymap: maps start key only
+%%   - range_end_keymap: maps end key only
 %%
 %% Possible maps type:
-%%   - a binary value: to construct keys like [<<"account">>, Timestamp]
+%%   - a binary value: to construct keys like ["account", Timestamp]
 %%   - an integer value: to construct keys like [1234, Timestamp]
-%%   - a list: to construct keys like [<<"en">>, <<"us">>, Timestamp]
+%%   - a list: to construct keys like ["en", "us", Timestamp]
 %%   - a function/1: To customize your own key using a function
 %% @end
 %%--------------------------------------------------------------------
