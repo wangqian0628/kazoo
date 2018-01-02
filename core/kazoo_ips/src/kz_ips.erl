@@ -13,7 +13,9 @@
         ,available/1
         ,available/2
         ]).
--export([assigned/1]).
+-export([assigned/0
+        ,assigned/1
+        ]).
 -export([zones/0]).
 -export([hosts/0]).
 -export([summary/1]).
@@ -63,21 +65,41 @@ available(Zone, Quantity) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
+-spec assigned() -> {'ok', kz_json:objects()} |
+                    {'error', any()}.
+assigned() ->
+    case fetch_assigned(['include_docs']) of
+        {'ok', JObjs} ->
+            {'ok', [kz_json:get_value(<<"doc">>, JObj) || JObj <- JObjs]};
+        Else ->
+            Else
+    end.
+
 -spec assigned(ne_binary()) ->
                       {'ok', kz_json:objects()} |
                       {'error', any()}.
 assigned(Account) ->
     AccountId = kz_util:format_account_id(Account, 'raw'),
     ViewOptions = [{'key', AccountId}],
+    case fetch_assigned(ViewOptions) of
+        {'ok', JObjs} ->
+            {'ok', sort_assigned([kz_json:get_value(<<"value">>, JObj) || JObj <- JObjs])};
+        Else ->
+            Else
+    end.
+
+-spec fetch_assigned(ne_binary()) ->
+                            {'ok', kz_json:objects()} |
+                            {'error', any()}.
+fetch_assigned(ViewOptions) ->
     case kz_datamgr:get_results(?KZ_DEDICATED_IP_DB
                                ,<<"dedicated_ips/assigned_to_listing">>
                                ,ViewOptions
                                )
     of
+        {'ok', _}=Ok -> Ok;
         {'error', 'not_found'} ->
-            kz_ip_utils:refresh_database(fun() -> assigned(Account) end);
-        {'ok', JObjs} ->
-            {'ok', sort_assigned([kz_json:get_value(<<"value">>, JObj) || JObj <- JObjs])};
+            kz_ip_utils:refresh_database(fun() -> fetch_assigned(ViewOptions) end);
         {'error', _R}=E ->
             lager:debug("unable to get assigned dedicated ips: ~p", [_R]),
             E
