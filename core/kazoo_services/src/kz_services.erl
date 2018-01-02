@@ -7,66 +7,137 @@
 %%%-------------------------------------------------------------------
 -module(kz_services).
 
--export([quantify/1]).
 
--export([add_service_plan/2]).
--export([delete_service_plan/2]).
--export([service_plan_json/1]).
+%%%
+%%% Service Object Functions
+%%%
+-export([new/0]).
+%% applications/crossbar/src/modules/cb_service_plans.erl:302
+%% applications/crossbar/src/modules/cb_services.erl:252
+%% applications/crossbar/src/modules_v1/cb_phone_numbers_v1.erl:305
+%% applications/crossbar/src/modules_v2/cb_phone_numbers_v2.erl:552
+%% applications/crossbar/src/crossbar_services.erl:245
+-export([fetch/1]).
+%% applications/crossbar/src/modules/cb_service_plans.erl:434
+%% applications/crossbar/src/crossbar_util.erl:537
+-export([fetch_services_doc/1
+        ,fetch_services_doc/2
+        ]).
+-export([flush_services/0]).
+%% applications/crossbar/src/modules/cb_services.erl:198
+-export([from_service_json/1
+        ,from_service_json/2
+        ]).
 -export([public_json/1]).
 -export([to_json/1]).
-
--export([new/0]).
--export([allow_updates/1]).
--export([from_service_json/1, from_service_json/2]).
--export([reconcile/1, reconcile/2
-        ,reconcile_only/1, reconcile_only/2
-        ,save_as_dirty/1
-        ]).
--export([fetch/1
-        ,fetch_services_doc/1, fetch_services_doc/2
-        ,flush_services/0
-        ]).
--export([update/4]).
 -export([save/1]).
+%% applications/crossbar/src/crossbar_services.erl:257
+-export([save_as_dirty/1]).
+%% applications/tasks/src/kz_service_sync.erl:80
+-export([clean/1]).
 -export([delete/1]).
+
+
+%%%
+%%% Status (?) Functions
+%%%
+-export([dry_run/1]).
+-export([allow_updates/1]).
+
+
+%%%
+%%% Category/Item Functions
+%%%
 -export([list_categories/1]).
 -export([list_items/2]).
-
--export([activation_charges/3]).
--export([commit_transactions/2]).
--export([charge_transactions/2]).
--export([select_bookkeeper/1]).
--export([check_bookkeeper/2]).
--export([set_billing_id/2]).
--export([get_billing_id/1, get_billing_id/2]).
--export([find_reseller_id/1]).
-
--export([account_id/1
-        ,services_json/1
-        ]).
--export([is_dirty/1]).
--export([quantity/3
-        ,diff_quantities/1
-        ,diff_quantity/3
-        ,have_quantities_changed/1
-        ]).
+-export([quantity/3]).
 -export([updated_quantity/3]).
 -export([category_quantity/2, category_quantity/3]).
 -export([cascade_quantity/3, cascade_quantities/1]).
 -export([cascade_category_quantity/2, cascade_category_quantity/3]).
+-export([update/4]).
 -export([reset_category/2]).
 
+-export([diff_quantities/1
+        ,diff_quantity/3
+        ]).
+-export([have_quantities_changed/1]).
+
+
+%%%
+%%% Service Plan Functions
+%%%
+-export([service_plan_json/1]).
+-export([add_service_plan/2]).
+-export([delete_service_plan/2]).
+
+
+%%%
+%%% Access functions
+%%%
+-export([is_services/1]).
+%% applications/crossbar/src/crossbar_services.erl:322
+%% applications/crossbar/src/crossbar_services.erl:324
+-export([account_id/1]).
+-export([get_billing_id/1
+        ,get_billing_id/2
+        ]).
+-export([set_billing_id/2]).
+%% applications/crossbar/src/crossbar_services.erl:344
+-export([services_json/1]).
 -export([is_reseller/1]).
 -export([get_reseller_id/1]).
+-export([find_reseller_id/1]).
+-export([is_dirty/1]).
 
--export([dry_run/1]).
 
--export([clean/1
-        ,sync/1, sync/2
-        ,mark_dirty/1
+%%%
+%%% Transaction functions
+%%%
+-export([activation_charges/3]).
+-export([commit_transactions/2]).
+-export([charge_transactions/2]).
+
+
+%%%
+%%% Bookkeeper functions
+%%%
+-export([select_bookkeeper/1]).
+-export([check_bookkeeper/2]).
+
+
+%%%
+%%% Services functions
+%%%
+%% applications/crossbar/src/modules/cb_service_plans.erl
+%% applications/crossbar/src/modules/cb_ips.erl
+%% applications/crossbar/src/modules/cb_accounts.erl
+%% applications/tasks/src/modules/kt_numbers.erl
+%% applications/tasks/src/kz_service_sync.erl
+-export([reconcile/1 %% and save
+        ,reconcile/2 %% and save
         ]).
+%% applications/crossbar/src/crossbar_services.erl:256
+%% applications/tasks/src/kz_service_sync.erl:268
+-export([reconcile_only/1
+        ,reconcile_only/2
+        ]).
+%% applications/crossbar/src/modules/cb_service_plans.erl:198
+%% applications/crossbar/src/modules/cb_braintree.erl:580
+%% applications/tasks/src/kz_service_sync.erl:293
+-export([sync/1
+        ,sync/2
+        ]).
+-export([mark_dirty/1]).
 
--export([is_services/1]).
+
+
+
+
+
+
+-export([quantify/1]).
+
 
 -include("services.hrl").
 
@@ -160,6 +231,10 @@ quantify_fold(Row, JObj) ->
     Value = kz_json:get_value(<<"value">>, Row),
     kz_json:set_value(Key, Value, JObj).
 
+
+%%%===================================================================
+%%% Service Object Functions
+%%%===================================================================
 %%--------------------------------------------------------------------
 %% @public
 %% @doc
@@ -276,34 +351,14 @@ default_service_plan_id(ResellerId) ->
             'undefined'
     end.
 
-%%--------------------------------------------------------------------
-%% @public
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec from_service_json(kz_json:object()) -> services().
--spec from_service_json(kz_json:object(), boolean()) -> services().
-from_service_json(JObj) ->
-    from_service_json(JObj, 'true').
-
-from_service_json(JObj, CalcUpdates) ->
-    AccountId = kz_doc:account_id(JObj),
-    BillingId = depreciated_billing_id(JObj, AccountId),
-    Services = #kz_services{account_id = AccountId
-                           ,jobj = JObj
-                           ,status = kzd_services:status(JObj)
-                           ,billing_id = BillingId
-                           ,current_billing_id = BillingId
-                           ,deleted = kz_doc:is_soft_deleted(JObj)
-                           ,dirty = kzd_services:is_dirty(JObj)
-                           },
-    maybe_calc_updates(Services, CalcUpdates).
-
-maybe_calc_updates(Services, 'false') -> Services;
-maybe_calc_updates(Services, 'true') ->
-    Qs = cascade_quantities(account_id(Services), is_reseller(Services)),
-    Services#kz_services{cascade_quantities = Qs}.
+-spec get_account_definition(ne_binary()) -> kz_account:doc().
+get_account_definition(?MATCH_ACCOUNT_RAW(AccountId)) ->
+    case fetch_account(AccountId) of
+        {'error', _R} ->
+            lager:debug("unable to get account defintion for ~s: ~p", [AccountId, _R]),
+            kz_json:new();
+        {'ok', JObj} -> JObj
+    end.
 
 %%--------------------------------------------------------------------
 %% @public
@@ -426,11 +481,28 @@ handle_fetch_result(AccountId, JObj) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec add_service_plan(ne_binary(), services()) -> services().
-add_service_plan(PlanId, #kz_services{jobj = JObj}=Services) ->
-    ResellerId = kzd_services:reseller_id(JObj),
-    UpdatedJObj = kz_service_plans:add_service_plan(PlanId, ResellerId, JObj),
-    Services#kz_services{jobj = UpdatedJObj}.
+-spec from_service_json(kz_json:object()) -> services().
+-spec from_service_json(kz_json:object(), boolean()) -> services().
+from_service_json(JObj) ->
+    from_service_json(JObj, 'true').
+
+from_service_json(JObj, CalcUpdates) ->
+    AccountId = kz_doc:account_id(JObj),
+    BillingId = depreciated_billing_id(JObj, AccountId),
+    Services = #kz_services{account_id = AccountId
+                           ,jobj = JObj
+                           ,status = kzd_services:status(JObj)
+                           ,billing_id = BillingId
+                           ,current_billing_id = BillingId
+                           ,deleted = kz_doc:is_soft_deleted(JObj)
+                           ,dirty = kzd_services:is_dirty(JObj)
+                           },
+    maybe_calc_updates(Services, CalcUpdates).
+
+maybe_calc_updates(Services, 'false') -> Services;
+maybe_calc_updates(Services, 'true') ->
+    Qs = cascade_quantities(account_id(Services), is_reseller(Services)),
+    Services#kz_services{cascade_quantities = Qs}.
 
 %%--------------------------------------------------------------------
 %% @public
@@ -438,10 +510,41 @@ add_service_plan(PlanId, #kz_services{jobj = JObj}=Services) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec delete_service_plan(ne_binary(), services()) -> services().
-delete_service_plan(PlanId, #kz_services{jobj = JObj}=Services) ->
-    Services#kz_services{jobj = kz_service_plans:delete_service_plan(PlanId, JObj)
-                        }.
+-spec public_json(ne_binary() | services()) -> kz_json:object().
+public_json(#kz_services{jobj = ServicesJObj
+                        ,cascade_quantities = CascadeQuantities
+                        }) ->
+    AccountId = kz_doc:account_id(ServicesJObj),
+    InGoodStanding = try maybe_follow_billing_id(AccountId, ServicesJObj)
+                     catch 'throw':_ -> 'false'
+                     end,
+    kz_json:from_list(
+      [{?QUANTITIES_ACCOUNT, kzd_services:quantities(ServicesJObj)}
+      ,{?QUANTITIES_CASCADE, CascadeQuantities}
+      ,{?PLANS, kz_service_plans:plan_summary(ServicesJObj)}
+      ,{<<"billing_id">>, kzd_services:billing_id(ServicesJObj, AccountId)}
+      ,{<<"reseller">>, kzd_services:is_reseller(ServicesJObj)}
+      ,{<<"reseller_id">>, kzd_services:reseller_id(ServicesJObj)}
+      ,{<<"dirty">>, kzd_services:is_dirty(ServicesJObj)}
+      ,{<<"in_good_standing">>, InGoodStanding}
+      ,{<<"items">>, kz_service_plans:public_json_items(ServicesJObj)}
+      ]);
+public_json(Account=?NE_BINARY) ->
+    public_json(fetch(Account)).
+
+-spec to_json(services()) -> kz_json:object().
+to_json(#kz_services{jobj = JObj
+                    ,updates = UpdatedQuantities
+                    ,cascade_quantities = CascadeQuantities
+                    }
+       ) ->
+    NewQuantities = kz_json:merge_jobjs(UpdatedQuantities, kzd_services:quantities(JObj)),
+    Props = props:filter_undefined(
+              [{fun kzd_services:set_quantities/2, NewQuantities}
+              ,{<<"cascade_quantities">>, CascadeQuantities}
+              ]),
+    kz_json:set_values(Props, JObj).
+
 
 %%--------------------------------------------------------------------
 %% @public
@@ -449,52 +552,6 @@ delete_service_plan(PlanId, #kz_services{jobj = JObj}=Services) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec save_as_dirty(ne_binary() | services()) -> services().
-save_as_dirty(Account=?NE_BINARY) ->
-    save_as_dirty(fetch(Account));
-save_as_dirty(#kz_services{}=Services) ->
-    save_as_dirty(Services, ?BASE_BACKOFF).
-
--spec save_as_dirty(ne_binary() | services(), pos_integer()) -> services().
-save_as_dirty(#kz_services{jobj = JObj
-                           %% ,updates = _Updates
-                          ,account_id = ?MATCH_ACCOUNT_RAW(AccountId)
-                          }=Services
-             ,BackOff
-             ) ->
-    Updates = [{fun kz_doc:set_id/2, AccountId}
-              ,{fun kzd_services:set_is_dirty/2, 'true'}
-              ,{fun kz_doc:set_modified/2, kz_time:now_s()}
-              ],
-    UpdatedJObj = lists:foldl(fun({F, V}, J) -> F(J, V) end, JObj, Updates),
-    case save_doc(UpdatedJObj) of
-        {'ok', SavedJObj} ->
-            lager:debug("marked services as dirty for account ~s", [AccountId]),
-            from_service_json(SavedJObj);
-        {'error', 'not_found'} ->
-            lager:debug("service database does not exist, attempting to create"),
-            'true' = kz_datamgr:db_create(?KZ_SERVICES_DB),
-            timer:sleep(BackOff),
-            save_as_dirty(Services, BackOff);
-        {'error', 'conflict'} ->
-            ?LOG_DEBUG("conflict when saving, attempting mitigation"),
-            save_conflicting_as_dirty(Services, BackOff)
-    end.
-
--spec save_conflicting_as_dirty(services(), pos_integer()) -> services().
-save_conflicting_as_dirty(#kz_services{account_id = AccountId}, BackOff) ->
-    {'ok', Existing} = fetch_services_doc(AccountId, 'true'),
-    NewServices = from_service_json(Existing),
-    case is_dirty(NewServices) of
-        'true' ->
-            ?LOG_DEBUG("services doc for ~s saved elsewhere", [AccountId]),
-            NewServices;
-        'false' ->
-            ?LOG_DEBUG("new services doc for ~s not dirty, marking it as so", [AccountId]),
-            timer:sleep(BackOff + rand:uniform(?BASE_BACKOFF)),
-            save_as_dirty(NewServices, BackOff*2)
-    end.
-
 -spec save(services()) -> services().
 save(#kz_services{}=Services) ->
     save(Services, ?BASE_BACKOFF).
@@ -544,6 +601,52 @@ save(#kz_services{jobj = JObj
             save(Services#kz_services{jobj = Existing}, 2 * BackOff)
     end.
 
+-spec save_as_dirty(ne_binary() | services()) -> services().
+save_as_dirty(Account=?NE_BINARY) ->
+    save_as_dirty(fetch(Account));
+save_as_dirty(#kz_services{}=Services) ->
+    save_as_dirty(Services, ?BASE_BACKOFF).
+
+-spec save_as_dirty(ne_binary() | services(), pos_integer()) -> services().
+save_as_dirty(#kz_services{jobj = JObj
+                           %% ,updates = _Updates
+                          ,account_id = ?MATCH_ACCOUNT_RAW(AccountId)
+                          }=Services
+             ,BackOff
+             ) ->
+    Updates = [{fun kz_doc:set_id/2, AccountId}
+              ,{fun kzd_services:set_is_dirty/2, 'true'}
+              ,{fun kz_doc:set_modified/2, kz_time:now_s()}
+              ],
+    UpdatedJObj = lists:foldl(fun({F, V}, J) -> F(J, V) end, JObj, Updates),
+    case save_doc(UpdatedJObj) of
+        {'ok', SavedJObj} ->
+            lager:debug("marked services as dirty for account ~s", [AccountId]),
+            from_service_json(SavedJObj);
+        {'error', 'not_found'} ->
+            lager:debug("service database does not exist, attempting to create"),
+            'true' = kz_datamgr:db_create(?KZ_SERVICES_DB),
+            timer:sleep(BackOff),
+            save_as_dirty(Services, BackOff);
+        {'error', 'conflict'} ->
+            ?LOG_DEBUG("conflict when saving, attempting mitigation"),
+            save_conflicting_as_dirty(Services, BackOff)
+    end.
+
+-spec save_conflicting_as_dirty(services(), pos_integer()) -> services().
+save_conflicting_as_dirty(#kz_services{account_id = AccountId}, BackOff) ->
+    {'ok', Existing} = fetch_services_doc(AccountId, 'true'),
+    NewServices = from_service_json(Existing),
+    case is_dirty(NewServices) of
+        'true' ->
+            ?LOG_DEBUG("services doc for ~s saved elsewhere", [AccountId]),
+            NewServices;
+        'false' ->
+            ?LOG_DEBUG("new services doc for ~s not dirty, marking it as so", [AccountId]),
+            timer:sleep(BackOff + rand:uniform(?BASE_BACKOFF)),
+            save_as_dirty(NewServices, BackOff*2)
+    end.
+
 -ifdef(TEST).
 save_doc(JObj) ->
     true = kz_json:is_json_object(JObj),
@@ -555,6 +658,47 @@ save_doc(JObj) ->
 save_doc(JObj) ->
     kz_datamgr:save_doc(?KZ_SERVICES_DB, JObj).
 -endif.
+
+-spec maybe_clean_old_billing_id(services()) -> services().
+maybe_clean_old_billing_id(#kz_services{billing_id = BillingId
+                                       ,current_billing_id = BillingId
+                                       }=Services) ->
+    Services;
+maybe_clean_old_billing_id(#kz_services{current_billing_id = BillingId
+                                       ,account_id = BillingId
+                                       ,jobj = JObj
+                                       }=Services) ->
+    case kzd_services:is_reseller(JObj) of
+        'true' -> Services;
+        'false' ->
+            _ = clean(BillingId),
+            Services
+    end;
+maybe_clean_old_billing_id(#kz_services{}=Services) ->
+    Services.
+
+-spec clean(ne_binary()) -> kz_std_return().
+clean(Account) ->
+    AccountId = kz_util:format_account_id(Account),
+    case ?MODULE:fetch_services_doc(AccountId, 'true') of
+        {'error', _}=E -> E;
+        {'ok', ServicesJObj} ->
+            immediate_sync(AccountId, kz_doc:set_soft_deleted(ServicesJObj, 'true'))
+    end.
+
+-spec immediate_sync(ne_binary(), kzd_services:doc()) -> kz_std_return().
+immediate_sync(AccountId, ServicesJObj) ->
+    case kz_service_plans:create_items(ServicesJObj) of
+        {'error', 'no_plans'}=E -> E;
+        {'ok', ServiceItems} ->
+            %% TODO: support other bookkeepers...
+            try kz_bookkeeper_braintree:sync(ServiceItems, AccountId) of
+                _ -> {'ok', ServicesJObj}
+            catch
+                'throw':{_, R} -> {'error', R};
+                _E:R -> {'error', R}
+            end
+    end.
 
 %%--------------------------------------------------------------------
 %% @public
@@ -580,318 +724,134 @@ delete(Account) ->
             E
     end.
 
-%%--------------------------------------------------------------------
-%% @public
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec list_categories(services()) -> api_ne_binaries().
-list_categories(#kz_services{jobj = JObj
-                            ,updates = Updates
-                            ,cascade_quantities = CascadeQuantities
-                            }) ->
-    sets:to_list(
-      sets:union([sets:from_list(kz_json:get_keys(kzd_services:quantities(JObj)))
-                 ,sets:from_list(kz_json:get_keys(Updates))
-                 ,sets:from_list(kz_json:get_keys(CascadeQuantities))
-                 ])).
-
-%%--------------------------------------------------------------------
-%% @public
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec list_items(services(), ne_binary()) -> api_ne_binaries().
-list_items(#kz_services{jobj = JObj
-                       ,updates = Updates
-                       ,cascade_quantities = CascadeQuantities
-                       }
-          ,Category
-          ) ->
-    sets:to_list(
-      sets:union([sets:from_list(kz_json:get_keys(kzd_services:category_quantities(JObj, Category)))
-                 ,sets:from_list(kz_json:get_keys(Category, Updates))
-                 ,sets:from_list(kz_json:get_keys(Category, CascadeQuantities))
-                 ])).
-
-%%--------------------------------------------------------------------
-%% @public
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec set_billing_id(api_binary(), ne_binary() | services()) -> 'undefined' | services().
-set_billing_id('undefined', _) -> 'undefined';
-set_billing_id(BillingId, #kz_services{billing_id = BillingId}) ->
-    'undefined';
-set_billing_id(BillingId, #kz_services{account_id = BillingId
-                                      ,jobj = ServicesJObj
-                                      }=Services) ->
-    Services#kz_services{jobj = kzd_services:set_billing_id(ServicesJObj, BillingId)
-                        ,billing_id = BillingId
-                        ,dirty = 'true'
-                        };
-set_billing_id(BillingId, #kz_services{jobj = ServicesJObj
-                                      }=Services) ->
-    PvtTree = kz_account:tree(ServicesJObj, [BillingId]),
-    try lists:last(PvtTree) of
-        BillingId ->
-            Services#kz_services{jobj = kzd_services:set_billing_id(ServicesJObj, BillingId)
-                                ,billing_id = BillingId
-                                ,dirty = 'true'
-                                };
-        _Else ->
-            throw({'invalid_billing_id', <<"Requested billing id is not the parent of this account">>})
-    catch
-        {'EXIT', _} ->
-            throw({'invalid_billing_id', <<"Unable to determine if billing id is valid">>})
-    end;
-set_billing_id(BillingId, AccountId=?NE_BINARY) ->
-    set_billing_id(BillingId, fetch(AccountId)).
-
-%%--------------------------------------------------------------------
-%% @public
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec get_billing_id(ne_binary() | services()) -> ne_binary().
-get_billing_id(#kz_services{billing_id = BillingId}) -> BillingId;
-get_billing_id(Account=?NE_BINARY) ->
-    AccountId = kz_util:format_account_id(Account),
-    ?LOG_DEBUG("determining if account ~s is able to make updates", [AccountId]),
-    case fetch_services_doc(AccountId) of
-        {'error', _R} ->
-            ?LOG_DEBUG("unable to open account ~s services: ~p", [AccountId, _R]),
-            AccountId;
-        {'ok', ServicesJObj} ->
-            case kzd_services:billing_id(ServicesJObj, AccountId) of
-                AccountId -> AccountId;
-                BillingId ->
-                    ?LOG_DEBUG("following billing id ~s", [BillingId]),
-                    get_billing_id(BillingId)
-            end
-    end.
-
-%%--------------------------------------------------------------------
-%% @public
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec update(ne_binary(), ne_binary(), integer(), services()) -> services().
-update(CategoryId, ItemId, Quantity, Services) when not is_integer(Quantity) ->
-    update(CategoryId, ItemId, kz_term:to_integer(Quantity), Services);
-update(CategoryId, ItemId, Quantity, #kz_services{updates = JObj
-                                                 }=Services)
-  when is_binary(CategoryId),
-       is_binary(ItemId) ->
-    lager:debug("setting ~s.~s to ~p in updates", [CategoryId, ItemId, Quantity]),
-    Services#kz_services{updates = kz_json:set_value([CategoryId, ItemId], Quantity, JObj)
-                        }.
-
-%%--------------------------------------------------------------------
-%% @public
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec activation_charges(ne_binary(), ne_binary(), services() | ne_binary() | kz_service_plans:plans()) ->
-                                float().
-activation_charges(CategoryId, ItemId, Plans)
-  when is_list(Plans) ->
-    kz_service_plans:activation_charges(CategoryId, ItemId, Plans);
-activation_charges(CategoryId, ItemId, #kz_services{jobj = ServicesJObj}) ->
-    Plans = kz_service_plans:from_service_json(ServicesJObj),
-    activation_charges(CategoryId, ItemId, Plans);
-activation_charges(CategoryId, ItemId, Account=?NE_BINARY) ->
-    Services = fetch(Account),
-    activation_charges(CategoryId, ItemId, Services).
-
-%%--------------------------------------------------------------------
-%% @public
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec commit_transactions(services(), kz_transactions:kz_transactions()) -> ok | error.
-commit_transactions(#kz_services{billing_id = BillingId}=Services, Activations) ->
-    Bookkeeper = select_bookkeeper(Services),
-    Transactions = [Activation
-                    || Activation <- Activations,
-                       kz_transaction:amount(Activation) > 0
-                   ],
-    Bookkeeper:commit_transactions(BillingId, Transactions).
-
-%%--------------------------------------------------------------------
-%% @public
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec charge_transactions(services(), kz_transactions:kz_transactions()) -> kz_json:objects().
-charge_transactions(#kz_services{billing_id = BillingId}=Services, Activations) ->
-    Bookkeeper = select_bookkeeper(Services),
-    Transactions = [kz_transaction:to_json(Activation)
-                    || Activation <- Activations,
-                       kz_transaction:amount(Activation) > 0
-                   ],
-    Bookkeeper:charge_transactions(BillingId, Transactions).
-
-%%--------------------------------------------------------------------
-%% @public
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec select_bookkeeper(services() | ne_binary()) -> bookkeeper().
-select_bookkeeper(#kz_services{billing_id = BillingId
-                              ,account_id = AccountId
-                              }
-                 ) ->
-    BillingIdReseller = get_reseller_id(BillingId),
-    {'ok', MasterAccountId} = master_account_id(),
-    case BillingIdReseller =:= MasterAccountId of
-        true -> ?KZ_SERVICE_MASTER_ACCOUNT_BOOKKEEPER;
-        false ->
-            case BillingIdReseller =:= get_reseller_id(AccountId) of
-                'true' -> select_bookkeeper(AccountId);
-                'false' -> 'kz_bookkeeper_local'
-            end
-    end;
-select_bookkeeper(AccountId) ->
-    ResellerId = get_reseller_id(AccountId),
-    {'ok', MasterAccountId} = master_account_id(),
-    case ResellerId =:= MasterAccountId of
-        true -> ?KZ_SERVICE_MASTER_ACCOUNT_BOOKKEEPER;
-        false ->
-            case ?MAYBE_RESELLER_BOOKKEEPER_LOOKUP of
-                'true' -> ?KZ_LOOKUP_BOOKKEEPER(ResellerId);
-                'false' -> 'kz_bookkeeper_local'
-            end
-    end.
-
-%%--------------------------------------------------------------------
-%% @public
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec check_bookkeeper(ne_binary(), integer()) -> boolean().
-check_bookkeeper(BillingId, Amount) ->
-    case select_bookkeeper(BillingId) of
-        'kz_bookkeeper_local' ->
-            case current_balance(BillingId) of
-                {'ok', Balance} -> Balance - Amount >= 0;
-                {'error', _R} ->
-                    ?LOG_DEBUG("error checking local bookkeeper balance: ~p", [_R]),
-                    false
-            end;
-        Bookkeeper ->
-            CurrentStatus = current_service_status(BillingId),
-            Bookkeeper:is_good_standing(BillingId, CurrentStatus)
-    end.
-
--spec current_service_status(ne_binary()) -> ne_binary().
-current_service_status(AccountId) ->
-    {'ok', ServicesJObj} = fetch_services_doc(AccountId),
-    kzd_services:status(ServicesJObj).
-
--ifdef(TEST).
-current_balance(?UNRELATED_ACCOUNT_ID) -> {ok, 100}.
--else.
-current_balance(AccountId) ->
-    wht_util:current_balance(AccountId).
--endif.
-
-%%--------------------------------------------------------------------
-%% @public
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec service_plan_json(ne_binary() | services()) -> kzd_service_plan:doc().
-service_plan_json(#kz_services{jobj = ServicesJObj}) ->
-    Plans = kz_service_plans:from_service_json(ServicesJObj),
-    kz_service_plans:public_json(Plans);
-service_plan_json(Account=?NE_BINARY) ->
-    service_plan_json(fetch(Account)).
-
-%%--------------------------------------------------------------------
-%% @public
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec public_json(ne_binary() | services()) -> kz_json:object().
-public_json(#kz_services{jobj = ServicesJObj
-                        ,cascade_quantities = CascadeQuantities
-                        }) ->
-    AccountId = kz_doc:account_id(ServicesJObj),
-    InGoodStanding = try maybe_follow_billing_id(AccountId, ServicesJObj)
-                     catch 'throw':_ -> 'false'
-                     end,
-    kz_json:from_list(
-      [{?QUANTITIES_ACCOUNT, kzd_services:quantities(ServicesJObj)}
-      ,{?QUANTITIES_CASCADE, CascadeQuantities}
-      ,{?PLANS, kz_service_plans:plan_summary(ServicesJObj)}
-      ,{<<"billing_id">>, kzd_services:billing_id(ServicesJObj, AccountId)}
-      ,{<<"reseller">>, kzd_services:is_reseller(ServicesJObj)}
-      ,{<<"reseller_id">>, kzd_services:reseller_id(ServicesJObj)}
-      ,{<<"dirty">>, kzd_services:is_dirty(ServicesJObj)}
-      ,{<<"in_good_standing">>, InGoodStanding}
-      ,{<<"items">>, kz_service_plans:public_json_items(ServicesJObj)}
-      ]);
-public_json(Account=?NE_BINARY) ->
-    public_json(fetch(Account)).
-
--spec to_json(services()) -> kz_json:object().
-to_json(#kz_services{jobj = JObj
-                    ,updates = UpdatedQuantities
-                    ,cascade_quantities = CascadeQuantities
-                    }
-       ) ->
-    NewQuantities = kz_json:merge_jobjs(UpdatedQuantities, kzd_services:quantities(JObj)),
-    Props = props:filter_undefined(
-              [{fun kzd_services:set_quantities/2, NewQuantities}
-              ,{<<"cascade_quantities">>, CascadeQuantities}
-              ]),
-    kz_json:set_values(Props, JObj).
-
-%%--------------------------------------------------------------------
-%% @public
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec find_reseller_id(api_binary()) -> api_binary().
-find_reseller_id('undefined') ->
-    case master_account_id() of
-        {'error', _} -> 'undefined';
-        {'ok', MasterAccountId} -> MasterAccountId
-    end;
-find_reseller_id(Account) ->
-    AccountId = kz_util:format_account_id(Account),
-    case fetch_services_doc(AccountId) of
-        {'ok', JObj} ->
-            case kzd_services:reseller_id(JObj) of
-                'undefined' -> get_reseller_id(Account);
-                ResellerId -> ResellerId
-            end;
-        {'error', _} -> get_reseller_id(Account)
-    end.
-
--ifdef(TEST).
-master_account_id() -> {ok, ?A_MASTER_ACCOUNT_ID}.
--else.
-master_account_id() -> kapps_util:get_master_account_id().
--endif.
-
 %%%===================================================================
-%%% Services functions
+%%% Status (?) Functions
 %%%===================================================================
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec dry_run(services()) -> kz_json:object().
+dry_run(Services) ->
+    ActivationsCharges = dry_run_activation_charges(Services),
+    calculate_charges(Services, ActivationsCharges).
+
+-spec dry_run_activation_charges(services()) -> kz_json:objects().
+-spec dry_run_activation_charges(ne_binary(), kz_json:object()
+                                ,services(), kz_json:objects()
+                                ) -> kz_json:objects().
+-spec dry_run_activation_charges(ne_binary(), ne_binary()
+                                ,integer(), services()
+                                ,kz_json:objects()
+                                ) -> kz_json:objects().
+dry_run_activation_charges(#kz_services{updates = Updates}=Services) ->
+    kz_json:foldl(fun(CategoryId, CategoryJObj, Acc) ->
+                          dry_run_activation_charges(CategoryId, CategoryJObj, Services, Acc)
+                  end
+                 ,[]
+                 ,Updates
+                 ).
+
+dry_run_activation_charges(CategoryId, CategoryJObj, Services, JObjs) ->
+    kz_json:foldl(fun(ItemId, Quantity, Acc1) ->
+                          dry_run_activation_charges(CategoryId, ItemId, Quantity, Services, Acc1)
+                  end
+                 ,JObjs
+                 ,CategoryJObj
+                 ).
+
+dry_run_activation_charges(CategoryId, ItemId, Quantity, #kz_services{jobj = JObj}=Services, JObjs) ->
+    case kzd_services:item_quantity(JObj, CategoryId, ItemId) of
+        Quantity -> JObjs;
+        OldQuantity ->
+            Plans = kz_service_plans:from_service_json(to_json(Services)),
+            Charges = activation_charges(CategoryId, ItemId, Plans),
+            ServicePlan = kz_service_plans:public_json(Plans),
+            ItemPlan = get_item_plan(CategoryId, ItemId, ServicePlan),
+            [kz_json:from_list(
+               [{<<"category">>, CategoryId}
+               ,{<<"item">>, kzd_item_plan:masquerade_as(ItemPlan, ItemId)}
+               ,{<<"amount">>, Charges}
+               ,{<<"quantity">>, Quantity}
+               ,{<<"activate_quantity">>, Quantity - OldQuantity}
+               ])
+             | JObjs
+            ]
+    end.
+
+-spec get_item_plan(ne_binary(), ne_binary(), kzd_service_plan:doc()) -> kz_json:object().
+get_item_plan(CategoryId, ItemId, ServicePlan) ->
+    case kzd_service_plan:item_plan(ServicePlan, CategoryId, ItemId, 'undefined') of
+        'undefined' -> kzd_service_plan:category_plan(ServicePlan, CategoryId);
+        Plan -> Plan
+    end.
+
+-spec calculate_charges(services(), kz_json:objects()) -> kz_json:object().
+calculate_charges(Services, JObjs) ->
+    case calculate_services_charges(Services) of
+        {'no_plan', _NP} -> kz_json:new();
+        {'ok', PlansCharges} ->
+            calculate_transactions_charges(PlansCharges, JObjs)
+    end.
+
+-spec calculate_services_charges(services()) ->
+                                        {'no_plan' | 'ok', kz_json:object()}.
+-spec calculate_services_charges(services(), kz_service_plans:plans()) ->
+                                        {'error' | 'ok', kz_json:object()}.
+calculate_services_charges(#kz_services{jobj = ServiceJObj}=Services) ->
+    case kz_service_plans:from_service_json(ServiceJObj) of
+        [] -> {'no_plan', kz_json:new()};
+        ServicePlans ->
+            calculate_services_charges(Services, ServicePlans)
+    end.
+
+calculate_services_charges(#kz_services{jobj = ServiceJObj
+                                       ,updates = UpdatesJObj
+                                       }=Service
+                          ,ServicePlans
+                          ) ->
+    CurrentQuantities = kzd_services:quantities(ServiceJObj),
+    UpdatedQuantities = kz_json:merge(CurrentQuantities, UpdatesJObj),
+
+    UpdatedServiceJObj = kzd_services:set_quantities(ServiceJObj, UpdatedQuantities),
+
+    ExistingItems = kz_service_plans:create_items(ServiceJObj, ServicePlans),
+    lager:debug("current items: ~s", [kz_json:encode(kz_service_items:public_json(ExistingItems))]),
+    UpdatedItems = kz_service_plans:create_items(UpdatedServiceJObj, ServicePlans),
+    lager:debug("items after update: ~s", [kz_json:encode(kz_service_items:public_json(UpdatedItems))]),
+    Changed = kz_service_items:get_updated_items(UpdatedItems, ExistingItems),
+    lager:debug("service diff quantities: ~s", [kz_json:encode(diff_quantities(Service))]),
+
+    lager:debug("computed service charges"),
+    {'ok', kz_service_items:public_json(Changed)}.
+
+-spec calculate_transactions_charges(kz_json:object(), kz_json:objects()) ->
+                                            kz_json:object().
+calculate_transactions_charges(PlansCharges, JObjs) ->
+    lists:foldl(fun calculate_transactions_charge_fold/2, PlansCharges, JObjs).
+
+-spec calculate_transactions_charge_fold(kz_json:object(), kz_json:object()) ->
+                                                kz_json:object().
+calculate_transactions_charge_fold(JObj, PlanCharges) ->
+    Amount = kz_json:get_value(<<"amount">>, JObj, 0),
+    Quantity = kz_json:get_value(<<"activate_quantity">>, JObj, 0),
+    SubTotal = kz_json:get_value(<<"activation_charges">>, PlanCharges, 0),
+
+    case SubTotal + (Amount * Quantity) of
+        Zero when Zero == 0 ->
+            %% Works for 0.0 and 0. May compare to a threshold though…
+            PlanCharges;
+        Total ->
+            CategoryId = kz_json:get_value(<<"category">>, JObj),
+            ItemId = kz_json:get_value(<<"item">>, JObj),
+            Props = [{<<"activation_charges">>, Total}
+                    ,{[CategoryId, ItemId, <<"activation_charges">>], Amount}
+                    ,{[CategoryId, ItemId, <<"activate_quantity">>], Quantity}
+                    ],
+            kz_json:set_values(Props, PlanCharges)
+    end.
 
 %%--------------------------------------------------------------------
 %% @public
@@ -983,73 +943,25 @@ move_to_good_standing(?MATCH_ACCOUNT_RAW(AccountId)) ->
     save(Services#kz_services{jobj = kzd_services:set_status(JObj, kzd_services:status_good())
                              }).
 
-%%--------------------------------------------------------------------
-%% @public
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec reconcile_only(api_ne_binary() | services()) -> 'false' | services().
-reconcile_only('undefined') -> 'false';
-reconcile_only(Account=?NE_BINARY) ->
-    reconcile_only(fetch(Account));
-reconcile_only(#kz_services{account_id=AccountId}=Services) ->
-    lager:debug("reconcile all services for ~s", [AccountId]),
-    Modules = get_service_modules(),
-    lists:foldl(fun reconcile_module/2, Services, Modules).
-
--spec reconcile_module(module(), services()) -> services().
--ifdef(TEST).
-reconcile_module(M, Services) ->
-    {reconcile,1} = lists:keyfind(reconcile, 1, M:module_info(exports)),
-    Services.
--else.
-reconcile_module(M, Services) ->
-    M:reconcile(Services).
--endif.
-
--spec reconcile(api_ne_binary() | services()) -> 'false' | services().
-reconcile('undefined') -> 'false';
-reconcile(Account=?NE_BINARY) ->
-    save(reconcile_only(Account));
-reconcile(#kz_services{}=Services) ->
-    save(reconcile_only(Services)).
-
-%%--------------------------------------------------------------------
-%% @public
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec reconcile_only(api_binary() | services(), text()) -> 'false' | services().
-reconcile_only('undefined', _Module) -> 'false';
-reconcile_only(Account=?NE_BINARY, Module) ->
-    reconcile_only(fetch(Account), Module);
-reconcile_only(#kz_services{account_id = _AccountId}=CurrentServices, Module) ->
-    lager:debug("reconcile ~s services for ~s", [Module, _AccountId]),
-    case get_service_module(Module) of
-        'false' -> 'false';
-        ServiceModule -> reconcile_module(ServiceModule, CurrentServices)
-    end.
-
--spec reconcile(api_binary() | services(), text()) -> 'false' | services().
-reconcile('undefined', _Module) -> 'false';
-reconcile(Account=?NE_BINARY, Module) ->
-    maybe_save(reconcile_only(Account, Module));
-reconcile(#kz_services{}=Services, Module) ->
-    pause_between_service_reconciliation(),
-    maybe_save(reconcile_only(Services, Module)).
-
--ifdef(TEST).
-pause_between_service_reconciliation() -> ok.
--else.
-pause_between_service_reconciliation() ->
-    timer:sleep(?MILLISECONDS_IN_SECOND).
--endif.
-
 %%%===================================================================
-%%% Access functions
+%%% Category/Item Functions
 %%%===================================================================
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec list_categories(services()) -> api_ne_binaries().
+list_categories(#kz_services{jobj = JObj
+                            ,updates = Updates
+                            ,cascade_quantities = CascadeQuantities
+                            }) ->
+    sets:to_list(
+      sets:union([sets:from_list(kz_json:get_keys(kzd_services:quantities(JObj)))
+                 ,sets:from_list(kz_json:get_keys(Updates))
+                 ,sets:from_list(kz_json:get_keys(CascadeQuantities))
+                 ])).
 
 %%--------------------------------------------------------------------
 %% @public
@@ -1057,40 +969,18 @@ pause_between_service_reconciliation() ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec account_id(services()) -> ne_binary().
-account_id(#kz_services{account_id = 'undefined'
-                       ,jobj = JObj
-                       }) ->
-    lager:debug("services has no account id, looking in ~s", [kz_json:encode(JObj)]),
-    kz_doc:account_id(JObj);
-account_id(#kz_services{account_id = AccountId}) ->
-    AccountId.
-
--spec services_json(services()) -> kzd_services:doc().
-services_json(#kz_services{jobj = JObj}) ->
-    JObj.
-
--spec is_dirty(services()) -> boolean().
-is_dirty(#kz_services{dirty = IsDirty}) ->
-    kz_term:is_true(IsDirty).
-
--spec is_services(any()) -> boolean().
-is_services(#kz_services{}) -> true;
-is_services(_) -> false.
-
--ifdef(TEST).
--spec current_billing_id(services()) -> api_ne_binary().
-current_billing_id(#kz_services{current_billing_id = CurrentBillingId}) ->
-    CurrentBillingId.
-
--spec is_deleted(services()) -> boolean().
-is_deleted(#kz_services{deleted = IsDeleted}) ->
-    IsDeleted.
-
--spec status(services()) -> ne_binary().
-status(#kz_services{status = Status}) ->
-    Status.
--endif.
+-spec list_items(services(), ne_binary()) -> api_ne_binaries().
+list_items(#kz_services{jobj = JObj
+                       ,updates = Updates
+                       ,cascade_quantities = CascadeQuantities
+                       }
+          ,Category
+          ) ->
+    sets:to_list(
+      sets:union([sets:from_list(kz_json:get_keys(kzd_services:category_quantities(JObj, Category)))
+                 ,sets:from_list(kz_json:get_keys(Category, Updates))
+                 ,sets:from_list(kz_json:get_keys(Category, CascadeQuantities))
+                 ])).
 
 %%--------------------------------------------------------------------
 %% @public
@@ -1105,50 +995,6 @@ quantity(CategoryId, ItemId, #kz_services{updates = Updates
                                          }) ->
     ItemQuantity = kzd_services:item_quantity(JObj, CategoryId, ItemId),
     kz_json:get_integer_value([CategoryId, ItemId], Updates, ItemQuantity).
-
--spec diff_quantities(services()) -> api_object().
-diff_quantities(#kz_services{deleted = 'true'}) -> 'undefined';
-diff_quantities(#kz_services{jobj = JObj
-                            ,updates = Updates
-                            }) ->
-    kz_json:foldl(fun diff_cat_quantities/3, Updates, kzd_services:quantities(JObj)).
-
--spec diff_cat_quantities(ne_binary(), kz_json:object(), kz_json:object()) -> kz_json:object().
-diff_cat_quantities(CategoryId, ItemsJObj, Updates) ->
-    kz_json:foldl(fun(I, Q, Acc) ->
-                          diff_item_quantities(I, Q, Acc, CategoryId)
-                  end
-                 ,Updates
-                 ,ItemsJObj
-                 ).
-
--spec diff_item_quantities(ne_binary(), integer(), kz_json:object(), ne_binary()) ->
-                                  kz_json:object().
-diff_item_quantities(ItemId, ItemQuantity, Updates, CategoryId) ->
-    UpdateQuantity = kz_json:get_integer_value([CategoryId, ItemId], Updates),
-    maybe_update_diff([CategoryId, ItemId], ItemQuantity, UpdateQuantity, Updates).
-
-maybe_update_diff(_Key, _ItemQuantity, 'undefined', Updates) ->
-    lager:debug("no update for ~p", [_Key]),
-    Updates;
-maybe_update_diff(_Key, 0, 0, Updates) ->
-    lager:debug("not updating ~p", [_Key]),
-    Updates;
-maybe_update_diff(_Key, ItemQuantity, ItemQuantity, Updates) ->
-    lager:debug("same quantity for ~p, ignoring", [_Key]),
-    Updates;
-maybe_update_diff(Key, ItemQuantity, UpdateQuantity, Updates) ->
-    lager:debug("updating ~p from ~p to ~p", [Key, ItemQuantity, UpdateQuantity]),
-    kz_json:set_value(Key, UpdateQuantity - ItemQuantity, Updates).
-
--spec diff_quantity(ne_binary(), ne_binary(), services()) -> integer().
-diff_quantity(_, _, #kz_services{deleted = 'true'}) -> 0;
-diff_quantity(CategoryId, ItemId, #kz_services{jobj = JObj
-                                              ,updates = Updates
-                                              }) ->
-    ItemQuantity = kzd_services:item_quantity(JObj, CategoryId, ItemId),
-    UpdateQuantity = kz_json:get_integer_value([CategoryId, ItemId], Updates, 0),
-    UpdateQuantity - ItemQuantity.
 
 %%--------------------------------------------------------------------
 %% @public
@@ -1218,233 +1064,6 @@ cascade_category_quantity(CategoryId, ItemExceptions, #kz_services{cascade_quant
 sum_values(Acc0, JObj) ->
     F = fun(_ItemId, ItemQuantity, Sum) -> ItemQuantity + Sum end,
     kz_json:foldl(F, Acc0, JObj).
-
-%%--------------------------------------------------------------------
-%% @public
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec reset_category(ne_binary(), services()) -> services().
-reset_category(CategoryId, #kz_services{updates = JObj}=Services) ->
-    NewUpdates = kz_json:set_value(CategoryId, kz_json:new(), JObj),
-    Services#kz_services{updates = NewUpdates
-                        }.
-
-%%--------------------------------------------------------------------
-%% @public
-%% @doc
-%%
-%% Helper function to know if an account is a reseller or not.
-%% @end
-%%--------------------------------------------------------------------
--spec is_reseller(ne_binary() | services() | kz_json:object()) -> boolean().
-is_reseller(#kz_services{jobj = ServicesJObj}) ->
-    is_reseller(ServicesJObj);
-is_reseller(Account=?NE_BINARY) ->
-    is_reseller(fetch(Account));
-is_reseller(ServicesJObj) ->
-    kzd_services:is_reseller(ServicesJObj).
-
-%%--------------------------------------------------------------------
-%% @public
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec dry_run(services()) -> kz_json:object().
-dry_run(Services) ->
-    ActivationsCharges = dry_run_activation_charges(Services),
-    calculate_charges(Services, ActivationsCharges).
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec calculate_charges(services(), kz_json:objects()) -> kz_json:object().
-calculate_charges(Services, JObjs) ->
-    case calculate_services_charges(Services) of
-        {'no_plan', _NP} -> kz_json:new();
-        {'ok', PlansCharges} ->
-            calculate_transactions_charges(PlansCharges, JObjs)
-    end.
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% @end
-%%--------------------------------------------------------------------
--spec calculate_services_charges(services()) ->
-                                        {'no_plan' | 'ok', kz_json:object()}.
--spec calculate_services_charges(services(), kz_service_plans:plans()) ->
-                                        {'error' | 'ok', kz_json:object()}.
-calculate_services_charges(#kz_services{jobj = ServiceJObj}=Services) ->
-    case kz_service_plans:from_service_json(ServiceJObj) of
-        [] -> {'no_plan', kz_json:new()};
-        ServicePlans ->
-            calculate_services_charges(Services, ServicePlans)
-    end.
-
-calculate_services_charges(#kz_services{jobj = ServiceJObj
-                                       ,updates = UpdatesJObj
-                                       }=Service
-                          ,ServicePlans
-                          ) ->
-    CurrentQuantities = kzd_services:quantities(ServiceJObj),
-    UpdatedQuantities = kz_json:merge(CurrentQuantities, UpdatesJObj),
-
-    UpdatedServiceJObj = kzd_services:set_quantities(ServiceJObj, UpdatedQuantities),
-
-    ExistingItems = kz_service_plans:create_items(ServiceJObj, ServicePlans),
-    lager:debug("current items: ~s", [kz_json:encode(kz_service_items:public_json(ExistingItems))]),
-    UpdatedItems = kz_service_plans:create_items(UpdatedServiceJObj, ServicePlans),
-    lager:debug("items after update: ~s", [kz_json:encode(kz_service_items:public_json(UpdatedItems))]),
-    Changed = kz_service_items:get_updated_items(UpdatedItems, ExistingItems),
-    lager:debug("service diff quantities: ~s", [kz_json:encode(diff_quantities(Service))]),
-
-    lager:debug("computed service charges"),
-    {'ok', kz_service_items:public_json(Changed)}.
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% @end
-%%--------------------------------------------------------------------
--spec calculate_transactions_charges(kz_json:object(), kz_json:objects()) ->
-                                            kz_json:object().
-calculate_transactions_charges(PlansCharges, JObjs) ->
-    lists:foldl(fun calculate_transactions_charge_fold/2, PlansCharges, JObjs).
-
--spec calculate_transactions_charge_fold(kz_json:object(), kz_json:object()) ->
-                                                kz_json:object().
-calculate_transactions_charge_fold(JObj, PlanCharges) ->
-    Amount = kz_json:get_value(<<"amount">>, JObj, 0),
-    Quantity = kz_json:get_value(<<"activate_quantity">>, JObj, 0),
-    SubTotal = kz_json:get_value(<<"activation_charges">>, PlanCharges, 0),
-
-    case SubTotal + (Amount * Quantity) of
-        Zero when Zero == 0 ->
-            %% Works for 0.0 and 0. May compare to a threshold though…
-            PlanCharges;
-        Total ->
-            CategoryId = kz_json:get_value(<<"category">>, JObj),
-            ItemId = kz_json:get_value(<<"item">>, JObj),
-            Props = [{<<"activation_charges">>, Total}
-                    ,{[CategoryId, ItemId, <<"activation_charges">>], Amount}
-                    ,{[CategoryId, ItemId, <<"activate_quantity">>], Quantity}
-                    ],
-            kz_json:set_values(Props, PlanCharges)
-    end.
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% @end
-%%--------------------------------------------------------------------
--spec dry_run_activation_charges(services()) -> kz_json:objects().
--spec dry_run_activation_charges(ne_binary(), kz_json:object()
-                                ,services(), kz_json:objects()
-                                ) -> kz_json:objects().
--spec dry_run_activation_charges(ne_binary(), ne_binary()
-                                ,integer(), services()
-                                ,kz_json:objects()
-                                ) -> kz_json:objects().
-dry_run_activation_charges(#kz_services{updates = Updates}=Services) ->
-    kz_json:foldl(fun(CategoryId, CategoryJObj, Acc) ->
-                          dry_run_activation_charges(CategoryId, CategoryJObj, Services, Acc)
-                  end
-                 ,[]
-                 ,Updates
-                 ).
-
-dry_run_activation_charges(CategoryId, CategoryJObj, Services, JObjs) ->
-    kz_json:foldl(fun(ItemId, Quantity, Acc1) ->
-                          dry_run_activation_charges(CategoryId, ItemId, Quantity, Services, Acc1)
-                  end
-                 ,JObjs
-                 ,CategoryJObj
-                 ).
-
-dry_run_activation_charges(CategoryId, ItemId, Quantity, #kz_services{jobj = JObj}=Services, JObjs) ->
-    case kzd_services:item_quantity(JObj, CategoryId, ItemId) of
-        Quantity -> JObjs;
-        OldQuantity ->
-            Plans = kz_service_plans:from_service_json(to_json(Services)),
-            Charges = activation_charges(CategoryId, ItemId, Plans),
-            ServicePlan = kz_service_plans:public_json(Plans),
-            ItemPlan = get_item_plan(CategoryId, ItemId, ServicePlan),
-            [kz_json:from_list(
-               [{<<"category">>, CategoryId}
-               ,{<<"item">>, kzd_item_plan:masquerade_as(ItemPlan, ItemId)}
-               ,{<<"amount">>, Charges}
-               ,{<<"quantity">>, Quantity}
-               ,{<<"activate_quantity">>, Quantity - OldQuantity}
-               ])
-             | JObjs
-            ]
-    end.
-
--spec get_item_plan(ne_binary(), ne_binary(), kzd_service_plan:doc()) -> kz_json:object().
-get_item_plan(CategoryId, ItemId, ServicePlan) ->
-    case kzd_service_plan:item_plan(ServicePlan, CategoryId, ItemId, 'undefined') of
-        'undefined' -> kzd_service_plan:category_plan(ServicePlan, CategoryId);
-        Plan -> Plan
-    end.
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec get_service_modules() -> atoms().
-get_service_modules() ->
-    case ?DEFAULT_SERVICE_MODULES of
-        [_|_]=ConfModules ->
-            lager:debug("configured service modules: ~p", [ConfModules]),
-            [kz_term:to_atom(Mod, 'true') || Mod <- ConfModules];
-        _ ->
-            ConfModules = ?SERVICE_MODULES,
-            kapps_config:set_default(?CONFIG_CAT, <<"modules">>, ConfModules),
-            lager:info("set default service modules: ~p", [ConfModules]),
-            ConfModules
-    end.
-
--spec default_service_modules() -> atoms().
-default_service_modules() ->
-    ['kz_service_devices'
-    ,'kz_service_ips'
-    ,'kz_service_ledgers'
-    ,'kz_service_limits'
-    ,'kz_service_phone_numbers'
-    ,'kz_service_ui_apps'
-    ,'kz_service_users'
-    ,'kz_service_whitelabel'
-    ,'kz_service_billing'
-    ,'kz_service_ratedeck'
-    ].
-
--spec get_service_module(text()) -> module() | 'false'.
-get_service_module(Module) when not is_binary(Module) ->
-    get_service_module(kz_term:to_binary(Module));
-get_service_module(<<?SERVICE_MODULE_PREFIX,_/binary>> = Module) ->
-    ServiceModules = get_service_modules(),
-    case [M
-          || M <- ServiceModules,
-             kz_term:to_binary(M) =:= Module
-         ]
-    of
-        [M] -> M;
-        _Else -> 'false'
-    end;
-get_service_module(Module) ->
-    get_service_module(<<?SERVICE_MODULE_PREFIX, Module/binary>>).
 
 %%--------------------------------------------------------------------
 %% @public
@@ -1532,21 +1151,272 @@ cascade_results(View, AccountId) ->
 -endif.
 
 %%--------------------------------------------------------------------
-%% @private
+%% @public
 %% @doc
-%% determine the billing id as it is currently set on the account
-%% definition as this will be depreciated in the future.
+%%
 %% @end
 %%--------------------------------------------------------------------
--spec depreciated_billing_id(kz_json:object()) -> ne_binary().
-depreciated_billing_id(JObj) ->
-    depreciated_billing_id(JObj, kz_doc:account_id(JObj)).
+-spec update(ne_binary(), ne_binary(), integer(), services()) -> services().
+update(CategoryId, ItemId, Quantity, Services) when not is_integer(Quantity) ->
+    update(CategoryId, ItemId, kz_term:to_integer(Quantity), Services);
+update(CategoryId, ItemId, Quantity, #kz_services{updates = JObj
+                                                 }=Services)
+  when is_binary(CategoryId),
+       is_binary(ItemId) ->
+    lager:debug("setting ~s.~s to ~p in updates", [CategoryId, ItemId, Quantity]),
+    Services#kz_services{updates = kz_json:set_value([CategoryId, ItemId], Quantity, JObj)
+                        }.
 
-depreciated_billing_id(JObj, AccountId) ->
-    case ?SUPPORT_BILLING_ID of
-        'true' -> kzd_services:billing_id(JObj, AccountId);
-        'false' -> AccountId
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec reset_category(ne_binary(), services()) -> services().
+reset_category(CategoryId, #kz_services{updates = JObj}=Services) ->
+    NewUpdates = kz_json:set_value(CategoryId, kz_json:new(), JObj),
+    Services#kz_services{updates = NewUpdates
+                        }.
+
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec diff_quantities(services()) -> api_object().
+diff_quantities(#kz_services{deleted = 'true'}) -> 'undefined';
+diff_quantities(#kz_services{jobj = JObj
+                            ,updates = Updates
+                            }) ->
+    kz_json:foldl(fun diff_cat_quantities/3, Updates, kzd_services:quantities(JObj)).
+
+-spec diff_cat_quantities(ne_binary(), kz_json:object(), kz_json:object()) -> kz_json:object().
+diff_cat_quantities(CategoryId, ItemsJObj, Updates) ->
+    kz_json:foldl(fun(I, Q, Acc) ->
+                          diff_item_quantities(I, Q, Acc, CategoryId)
+                  end
+                 ,Updates
+                 ,ItemsJObj
+                 ).
+
+-spec diff_item_quantities(ne_binary(), integer(), kz_json:object(), ne_binary()) ->
+                                  kz_json:object().
+diff_item_quantities(ItemId, ItemQuantity, Updates, CategoryId) ->
+    UpdateQuantity = kz_json:get_integer_value([CategoryId, ItemId], Updates),
+    maybe_update_diff([CategoryId, ItemId], ItemQuantity, UpdateQuantity, Updates).
+
+maybe_update_diff(_Key, _ItemQuantity, 'undefined', Updates) ->
+    lager:debug("no update for ~p", [_Key]),
+    Updates;
+maybe_update_diff(_Key, 0, 0, Updates) ->
+    lager:debug("not updating ~p", [_Key]),
+    Updates;
+maybe_update_diff(_Key, ItemQuantity, ItemQuantity, Updates) ->
+    lager:debug("same quantity for ~p, ignoring", [_Key]),
+    Updates;
+maybe_update_diff(Key, ItemQuantity, UpdateQuantity, Updates) ->
+    lager:debug("updating ~p from ~p to ~p", [Key, ItemQuantity, UpdateQuantity]),
+    kz_json:set_value(Key, UpdateQuantity - ItemQuantity, Updates).
+
+-spec diff_quantity(ne_binary(), ne_binary(), services()) -> integer().
+diff_quantity(_, _, #kz_services{deleted = 'true'}) -> 0;
+diff_quantity(CategoryId, ItemId, #kz_services{jobj = JObj
+                                              ,updates = Updates
+                                              }) ->
+    ItemQuantity = kzd_services:item_quantity(JObj, CategoryId, ItemId),
+    UpdateQuantity = kz_json:get_integer_value([CategoryId, ItemId], Updates, 0),
+    UpdateQuantity - ItemQuantity.
+
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec have_quantities_changed(services()) -> boolean().
+-spec have_quantities_changed(kz_json:object(), kz_json:object()) -> boolean().
+have_quantities_changed(#kz_services{jobj = JObj
+                                    ,updates = UpdatedQuantities
+                                    }) ->
+    CurrentQuantities = kzd_services:quantities(JObj),
+    have_quantities_changed(UpdatedQuantities, CurrentQuantities).
+
+have_quantities_changed(Updated, Current) ->
+    KeyNotSameFun = fun(Key) ->
+                            kz_json:get_value(Key, Updated) =/= kz_json:get_value(Key, Current)
+                    end,
+    any_changed(KeyNotSameFun, Updated)
+        orelse any_changed(KeyNotSameFun, Current).
+
+-type changed_fun() :: fun((kz_json:path()) -> boolean()).
+
+-spec any_changed(changed_fun(), kz_json:object()) -> boolean().
+any_changed(KeyNotSameFun, Quantities) ->
+    lists:any(KeyNotSameFun
+             ,[[CategoryId, ItemId]
+               || CategoryId <- kz_json:get_keys(Quantities),
+                  ItemId <- kz_json:get_keys(CategoryId, Quantities)
+              ]).
+
+%%%===================================================================
+%%% Service Plan Functions
+%%%===================================================================
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec service_plan_json(ne_binary() | services()) -> kzd_service_plan:doc().
+service_plan_json(#kz_services{jobj = ServicesJObj}) ->
+    Plans = kz_service_plans:from_service_json(ServicesJObj),
+    kz_service_plans:public_json(Plans);
+service_plan_json(Account=?NE_BINARY) ->
+    service_plan_json(fetch(Account)).
+
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec add_service_plan(ne_binary(), services()) -> services().
+add_service_plan(PlanId, #kz_services{jobj = JObj}=Services) ->
+    ResellerId = kzd_services:reseller_id(JObj),
+    UpdatedJObj = kz_service_plans:add_service_plan(PlanId, ResellerId, JObj),
+    Services#kz_services{jobj = UpdatedJObj}.
+
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_service_plan(ne_binary(), services()) -> services().
+delete_service_plan(PlanId, #kz_services{jobj = JObj}=Services) ->
+    Services#kz_services{jobj = kz_service_plans:delete_service_plan(PlanId, JObj)
+                        }.
+
+%%%===================================================================
+%%% Access functions
+%%%===================================================================
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec is_services(any()) -> boolean().
+is_services(#kz_services{}) -> true;
+is_services(_) -> false.
+
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec account_id(services()) -> ne_binary().
+account_id(#kz_services{account_id = 'undefined'
+                       ,jobj = JObj
+                       }) ->
+    lager:debug("services has no account id, looking in ~s", [kz_json:encode(JObj)]),
+    kz_doc:account_id(JObj);
+account_id(#kz_services{account_id = AccountId}) ->
+    AccountId.
+
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec get_billing_id(ne_binary() | services()) -> ne_binary().
+get_billing_id(#kz_services{billing_id = BillingId}) -> BillingId;
+get_billing_id(Account=?NE_BINARY) ->
+    AccountId = kz_util:format_account_id(Account),
+    ?LOG_DEBUG("determining if account ~s is able to make updates", [AccountId]),
+    case fetch_services_doc(AccountId) of
+        {'error', _R} ->
+            ?LOG_DEBUG("unable to open account ~s services: ~p", [AccountId, _R]),
+            AccountId;
+        {'ok', ServicesJObj} ->
+            case kzd_services:billing_id(ServicesJObj, AccountId) of
+                AccountId -> AccountId;
+                BillingId ->
+                    ?LOG_DEBUG("following billing id ~s", [BillingId]),
+                    get_billing_id(BillingId)
+            end
     end.
+
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec get_billing_id(ne_binary(), kzd_services:doc()) -> ne_binary().
+get_billing_id(AccountId, ServicesJObj) ->
+    case kzd_services:is_reseller(ServicesJObj) of
+        'true' -> AccountId;
+        'false' ->
+            case ?SUPPORT_BILLING_ID of
+                'true' -> kzd_services:billing_id(ServicesJObj, AccountId);
+                'false' -> AccountId
+            end
+    end.
+
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec set_billing_id(api_binary(), ne_binary() | services()) -> 'undefined' | services().
+set_billing_id('undefined', _) -> 'undefined';
+set_billing_id(BillingId, #kz_services{billing_id = BillingId}) ->
+    'undefined';
+set_billing_id(BillingId, #kz_services{account_id = BillingId
+                                      ,jobj = ServicesJObj
+                                      }=Services) ->
+    Services#kz_services{jobj = kzd_services:set_billing_id(ServicesJObj, BillingId)
+                        ,billing_id = BillingId
+                        ,dirty = 'true'
+                        };
+set_billing_id(BillingId, #kz_services{jobj = ServicesJObj
+                                      }=Services) ->
+    PvtTree = kz_account:tree(ServicesJObj, [BillingId]),
+    try lists:last(PvtTree) of
+        BillingId ->
+            Services#kz_services{jobj = kzd_services:set_billing_id(ServicesJObj, BillingId)
+                                ,billing_id = BillingId
+                                ,dirty = 'true'
+                                };
+        _Else ->
+            throw({'invalid_billing_id', <<"Requested billing id is not the parent of this account">>})
+    catch
+        {'EXIT', _} ->
+            throw({'invalid_billing_id', <<"Unable to determine if billing id is valid">>})
+    end;
+set_billing_id(BillingId, AccountId=?NE_BINARY) ->
+    set_billing_id(BillingId, fetch(AccountId)).
+
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% Helper function to know if an account is a reseller or not.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_reseller(ne_binary() | services() | kz_json:object()) -> boolean().
+is_reseller(#kz_services{jobj = ServicesJObj}) ->
+    is_reseller(ServicesJObj);
+is_reseller(Account=?NE_BINARY) ->
+    is_reseller(fetch(Account));
+is_reseller(ServicesJObj) ->
+    kzd_services:is_reseller(ServicesJObj).
 
 %%--------------------------------------------------------------------
 %% @public
@@ -1595,11 +1465,330 @@ fetch_account(Account) -> kz_account:fetch(Account).
 -endif.
 
 %%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec find_reseller_id(api_binary()) -> api_binary().
+find_reseller_id('undefined') ->
+    case master_account_id() of
+        {'error', _} -> 'undefined';
+        {'ok', MasterAccountId} -> MasterAccountId
+    end;
+find_reseller_id(Account) ->
+    AccountId = kz_util:format_account_id(Account),
+    case fetch_services_doc(AccountId) of
+        {'ok', JObj} ->
+            case kzd_services:reseller_id(JObj) of
+                'undefined' -> get_reseller_id(Account);
+                ResellerId -> ResellerId
+            end;
+        {'error', _} -> get_reseller_id(Account)
+    end.
+
+-ifdef(TEST).
+master_account_id() -> {ok, ?A_MASTER_ACCOUNT_ID}.
+-else.
+master_account_id() -> kapps_util:get_master_account_id().
+-endif.
+
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec is_dirty(services()) -> boolean().
+is_dirty(#kz_services{dirty = IsDirty}) ->
+    kz_term:is_true(IsDirty).
+
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec services_json(services()) -> kzd_services:doc().
+services_json(#kz_services{jobj = JObj}) ->
+    JObj.
+
+%%--------------------------------------------------------------------
 %% @private
 %% @doc
 %%
 %% @end
 %%--------------------------------------------------------------------
+-ifdef(TEST).
+-spec current_billing_id(services()) -> api_ne_binary().
+current_billing_id(#kz_services{current_billing_id = CurrentBillingId}) ->
+    CurrentBillingId.
+
+-spec is_deleted(services()) -> boolean().
+is_deleted(#kz_services{deleted = IsDeleted}) ->
+    IsDeleted.
+
+-spec status(services()) -> ne_binary().
+status(#kz_services{status = Status}) ->
+    Status.
+-endif.
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% determine the billing id as it is currently set on the account
+%% definition as this will be depreciated in the future.
+%% @end
+%%--------------------------------------------------------------------
+-spec depreciated_billing_id(kz_json:object()) -> ne_binary().
+depreciated_billing_id(JObj) ->
+    depreciated_billing_id(JObj, kz_doc:account_id(JObj)).
+
+depreciated_billing_id(JObj, AccountId) ->
+    case ?SUPPORT_BILLING_ID of
+        'true' -> kzd_services:billing_id(JObj, AccountId);
+        'false' -> AccountId
+    end.
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec get_service_modules() -> atoms().
+get_service_modules() ->
+    case ?DEFAULT_SERVICE_MODULES of
+        [_|_]=ConfModules ->
+            lager:debug("configured service modules: ~p", [ConfModules]),
+            [kz_term:to_atom(Mod, 'true') || Mod <- ConfModules];
+        _ ->
+            ConfModules = ?SERVICE_MODULES,
+            kapps_config:set_default(?CONFIG_CAT, <<"modules">>, ConfModules),
+            lager:info("set default service modules: ~p", [ConfModules]),
+            ConfModules
+    end.
+
+-spec default_service_modules() -> atoms().
+default_service_modules() ->
+    ['kz_service_devices'
+    ,'kz_service_ips'
+    ,'kz_service_ledgers'
+    ,'kz_service_limits'
+    ,'kz_service_phone_numbers'
+    ,'kz_service_ui_apps'
+    ,'kz_service_users'
+    ,'kz_service_whitelabel'
+    ,'kz_service_billing'
+    ,'kz_service_ratedeck'
+    ].
+
+-spec get_service_module(text()) -> module() | 'false'.
+get_service_module(Module) when not is_binary(Module) ->
+    get_service_module(kz_term:to_binary(Module));
+get_service_module(<<?SERVICE_MODULE_PREFIX,_/binary>> = Module) ->
+    ServiceModules = get_service_modules(),
+    case [M
+          || M <- ServiceModules,
+             kz_term:to_binary(M) =:= Module
+         ]
+    of
+        [M] -> M;
+        _Else -> 'false'
+    end;
+get_service_module(Module) ->
+    get_service_module(<<?SERVICE_MODULE_PREFIX, Module/binary>>).
+
+%%%===================================================================
+%%% Transaction functions
+%%%===================================================================
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec activation_charges(ne_binary(), ne_binary(), services() | ne_binary() | kz_service_plans:plans()) ->
+                                float().
+activation_charges(CategoryId, ItemId, Plans)
+  when is_list(Plans) ->
+    kz_service_plans:activation_charges(CategoryId, ItemId, Plans);
+activation_charges(CategoryId, ItemId, #kz_services{jobj = ServicesJObj}) ->
+    Plans = kz_service_plans:from_service_json(ServicesJObj),
+    activation_charges(CategoryId, ItemId, Plans);
+activation_charges(CategoryId, ItemId, Account=?NE_BINARY) ->
+    Services = fetch(Account),
+    activation_charges(CategoryId, ItemId, Services).
+
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec commit_transactions(services(), kz_transactions:kz_transactions()) -> ok | error.
+commit_transactions(#kz_services{billing_id = BillingId}=Services, Activations) ->
+    Bookkeeper = select_bookkeeper(Services),
+    Transactions = [Activation
+                    || Activation <- Activations,
+                       kz_transaction:amount(Activation) > 0
+                   ],
+    Bookkeeper:commit_transactions(BillingId, Transactions).
+
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec charge_transactions(services(), kz_transactions:kz_transactions()) -> kz_json:objects().
+charge_transactions(#kz_services{billing_id = BillingId}=Services, Activations) ->
+    Bookkeeper = select_bookkeeper(Services),
+    Transactions = [kz_transaction:to_json(Activation)
+                    || Activation <- Activations,
+                       kz_transaction:amount(Activation) > 0
+                   ],
+    Bookkeeper:charge_transactions(BillingId, Transactions).
+
+%%%===================================================================
+%%% Bookkeeper functions
+%%%===================================================================
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec select_bookkeeper(services() | ne_binary()) -> bookkeeper().
+select_bookkeeper(#kz_services{billing_id = BillingId
+                              ,account_id = AccountId
+                              }
+                 ) ->
+    BillingIdReseller = get_reseller_id(BillingId),
+    {'ok', MasterAccountId} = master_account_id(),
+    case BillingIdReseller =:= MasterAccountId of
+        true -> ?KZ_SERVICE_MASTER_ACCOUNT_BOOKKEEPER;
+        false ->
+            case BillingIdReseller =:= get_reseller_id(AccountId) of
+                'true' -> select_bookkeeper(AccountId);
+                'false' -> 'kz_bookkeeper_local'
+            end
+    end;
+select_bookkeeper(AccountId) ->
+    ResellerId = get_reseller_id(AccountId),
+    {'ok', MasterAccountId} = master_account_id(),
+    case ResellerId =:= MasterAccountId of
+        true -> ?KZ_SERVICE_MASTER_ACCOUNT_BOOKKEEPER;
+        false ->
+            case ?MAYBE_RESELLER_BOOKKEEPER_LOOKUP of
+                'true' -> ?KZ_LOOKUP_BOOKKEEPER(ResellerId);
+                'false' -> 'kz_bookkeeper_local'
+            end
+    end.
+
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec check_bookkeeper(ne_binary(), integer()) -> boolean().
+check_bookkeeper(BillingId, Amount) ->
+    case select_bookkeeper(BillingId) of
+        'kz_bookkeeper_local' ->
+            case current_balance(BillingId) of
+                {'ok', Balance} -> Balance - Amount >= 0;
+                {'error', _R} ->
+                    ?LOG_DEBUG("error checking local bookkeeper balance: ~p", [_R]),
+                    false
+            end;
+        Bookkeeper ->
+            CurrentStatus = current_service_status(BillingId),
+            Bookkeeper:is_good_standing(BillingId, CurrentStatus)
+    end.
+
+-spec current_service_status(ne_binary()) -> ne_binary().
+current_service_status(AccountId) ->
+    {'ok', ServicesJObj} = fetch_services_doc(AccountId),
+    kzd_services:status(ServicesJObj).
+
+-ifdef(TEST).
+current_balance(?UNRELATED_ACCOUNT_ID) -> {ok, 100}.
+-else.
+current_balance(AccountId) ->
+    wht_util:current_balance(AccountId).
+-endif.
+
+%%%===================================================================
+%%% Services functions
+%%%===================================================================
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec reconcile_only(api_ne_binary() | services()) -> 'false' | services().
+reconcile_only('undefined') -> 'false';
+reconcile_only(Account=?NE_BINARY) ->
+    reconcile_only(fetch(Account));
+reconcile_only(#kz_services{account_id=AccountId}=Services) ->
+    lager:debug("reconcile all services for ~s", [AccountId]),
+    Modules = get_service_modules(),
+    lists:foldl(fun reconcile_module/2, Services, Modules).
+
+-spec reconcile_module(module(), services()) -> services().
+-ifdef(TEST).
+reconcile_module(M, Services) ->
+    {reconcile,1} = lists:keyfind(reconcile, 1, M:module_info(exports)),
+    Services.
+-else.
+reconcile_module(M, Services) ->
+    M:reconcile(Services).
+-endif.
+
+-spec reconcile(api_ne_binary() | services()) -> 'false' | services().
+reconcile('undefined') -> 'false';
+reconcile(Account=?NE_BINARY) ->
+    save(reconcile_only(Account));
+reconcile(#kz_services{}=Services) ->
+    save(reconcile_only(Services)).
+
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec reconcile_only(api_binary() | services(), text()) -> 'false' | services().
+reconcile_only('undefined', _Module) -> 'false';
+reconcile_only(Account=?NE_BINARY, Module) ->
+    reconcile_only(fetch(Account), Module);
+reconcile_only(#kz_services{account_id = _AccountId}=CurrentServices, Module) ->
+    lager:debug("reconcile ~s services for ~s", [Module, _AccountId]),
+    case get_service_module(Module) of
+        'false' -> 'false';
+        ServiceModule -> reconcile_module(ServiceModule, CurrentServices)
+    end.
+
+-spec reconcile(api_binary() | services(), text()) -> 'false' | services().
+reconcile('undefined', _Module) -> 'false';
+reconcile(Account=?NE_BINARY, Module) ->
+    maybe_save(reconcile_only(Account, Module));
+reconcile(#kz_services{}=Services, Module) ->
+    pause_between_service_reconciliation(),
+    maybe_save(reconcile_only(Services, Module)).
+
+-ifdef(TEST).
+pause_between_service_reconciliation() -> ok.
+-else.
+pause_between_service_reconciliation() ->
+    timer:sleep(?MILLISECONDS_IN_SECOND).
+-endif.
+
 -spec maybe_save('false' | services()) -> 'false' | services().
 maybe_save('false') -> 'false';
 maybe_save(#kz_services{jobj = JObj
@@ -1615,100 +1804,10 @@ maybe_save(#kz_services{jobj = JObj
             Services
     end.
 
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec have_quantities_changed(services()) -> boolean().
--spec have_quantities_changed(kz_json:object(), kz_json:object()) -> boolean().
-have_quantities_changed(#kz_services{jobj = JObj
-                                    ,updates = UpdatedQuantities
-                                    }) ->
-    CurrentQuantities = kzd_services:quantities(JObj),
-    have_quantities_changed(UpdatedQuantities, CurrentQuantities).
 
-have_quantities_changed(Updated, Current) ->
-    KeyNotSameFun = fun(Key) ->
-                            kz_json:get_value(Key, Updated) =/= kz_json:get_value(Key, Current)
-                    end,
-    any_changed(KeyNotSameFun, Updated)
-        orelse any_changed(KeyNotSameFun, Current).
-
--type changed_fun() :: fun((kz_json:path()) -> boolean()).
-
--spec any_changed(changed_fun(), kz_json:object()) -> boolean().
-any_changed(KeyNotSameFun, Quantities) ->
-    lists:any(KeyNotSameFun
-             ,[[CategoryId, ItemId]
-               || CategoryId <- kz_json:get_keys(Quantities),
-                  ItemId <- kz_json:get_keys(CategoryId, Quantities)
-              ]).
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec get_account_definition(ne_binary()) -> kz_account:doc().
-get_account_definition(?MATCH_ACCOUNT_RAW(AccountId)) ->
-    case fetch_account(AccountId) of
-        {'error', _R} ->
-            lager:debug("unable to get account defintion for ~s: ~p", [AccountId, _R]),
-            kz_json:new();
-        {'ok', JObj} -> JObj
-    end.
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%%
-%% @end
-%%--------------------------------------------------------------------
--spec maybe_clean_old_billing_id(services()) -> services().
-maybe_clean_old_billing_id(#kz_services{billing_id = BillingId
-                                       ,current_billing_id = BillingId
-                                       }=Services) ->
-    Services;
-maybe_clean_old_billing_id(#kz_services{current_billing_id = BillingId
-                                       ,account_id = BillingId
-                                       ,jobj = JObj
-                                       }=Services) ->
-    case kzd_services:is_reseller(JObj) of
-        'true' -> Services;
-        'false' ->
-            _ = clean(BillingId),
-            Services
-    end;
-maybe_clean_old_billing_id(#kz_services{}=Services) ->
-    Services.
-
-
--spec clean(ne_binary()) -> kz_std_return().
-clean(Account) ->
-    AccountId = kz_util:format_account_id(Account),
-    case ?MODULE:fetch_services_doc(AccountId, 'true') of
-        {'error', _}=E -> E;
-        {'ok', ServicesJObj} ->
-            immediate_sync(AccountId, kz_doc:set_soft_deleted(ServicesJObj, 'true'))
-    end.
-
--spec immediate_sync(ne_binary(), kzd_services:doc()) -> kz_std_return().
-immediate_sync(AccountId, ServicesJObj) ->
-    case kz_service_plans:create_items(ServicesJObj) of
-        {'error', 'no_plans'}=E -> E;
-        {'ok', ServiceItems} ->
-            %% TODO: support other bookkeepers...
-            try kz_bookkeeper_braintree:sync(ServiceItems, AccountId) of
-                _ -> {'ok', ServicesJObj}
-            catch
-                'throw':{_, R} -> {'error', R};
-                _E:R -> {'error', R}
-            end
-    end.
-
+%%%===================================================================
+%%% Sync functions
+%%%===================================================================
 -spec sync(ne_binary()) -> kz_std_return().
 sync(Account) ->
     AccountId = kz_util:format_account_id(Account),
@@ -1874,16 +1973,7 @@ maybe_sync_reseller(AccountId, ServicesJObj) ->
             mark_dirty(ResellerId)
     end.
 
--spec get_billing_id(ne_binary(), kzd_services:doc()) -> ne_binary().
-get_billing_id(AccountId, ServicesJObj) ->
-    case kzd_services:is_reseller(ServicesJObj) of
-        'true' -> AccountId;
-        'false' ->
-            case ?SUPPORT_BILLING_ID of
-                'true' -> kzd_services:billing_id(ServicesJObj, AccountId);
-                'false' -> AccountId
-            end
-    end.
+
 
 -spec mark_dirty(ne_binary() | kzd_services:doc()) -> kz_std_return().
 mark_dirty(?MATCH_ACCOUNT_RAW(AccountId)) ->
