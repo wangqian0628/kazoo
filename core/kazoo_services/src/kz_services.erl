@@ -7,6 +7,8 @@
 %%%-------------------------------------------------------------------
 -module(kz_services).
 
+-export([quantify/1]).
+
 -export([add_service_plan/2]).
 -export([delete_service_plan/2]).
 -export([service_plan_json/1]).
@@ -119,6 +121,44 @@
 -export([get_service_modules/0]).
 -endif.
 
+%%--------------------------------------------------------------------
+%% @public
+%% @doc
+%%
+%% @end
+%%--------------------------------------------------------------------
+-spec quantify(ne_binary()) -> kz_json:object().
+quantify(Account) ->
+    AccountDb = kz_util:format_account_db(Account),
+    ViewOptions = ['reduce', 'group'],
+    {'ok', JObjs} = kz_datamgr:get_results(AccountDb, <<"services-new/quantify">>, ViewOptions),
+    Routines = [fun fix_quanitfy_ui_apps/1],
+    lists:foldl(fun (F, J) -> F(J) end
+               ,lists:foldl(fun quantify_fold/2, kz_json:new(), JObjs)
+               ,Routines
+               ).
+
+-spec fix_quanitfy_ui_apps(kz_json:object()) -> kz_json:object().
+fix_quanitfy_ui_apps(JObj) ->
+    Admins = kz_json:get_integer_value([<<"users">>, <<"admin">>], JObj, 0),
+    Users = kz_json:get_integer_value([<<"users">>, <<"user">>], JObj, 0),
+    fix_quanitfy_ui_apps(Admins, Admins + Users, JObj).
+
+-spec fix_quanitfy_ui_apps(non_neg_integer(), non_neg_integer(), kz_json:object()) -> kz_json:object().
+fix_quanitfy_ui_apps(Admins, All, JObj) ->
+    UIApps = kz_json:get_value(<<"ui_apps">>, JObj, kz_json:new()),
+    Updated = kz_json:map(fun(K, -1) -> {K, All};
+                             (K, -2) -> {K, Admins};
+                             (K, V) -> {K, V}
+                          end, UIApps
+                         ),
+    kz_json:set_value(<<"ui_apps">>, Updated, JObj).
+
+-spec quantify_fold(kz_json:object(), kz_json:object()) -> kz_json:object().
+quantify_fold(Row, JObj) ->
+    Key = kz_json:get_value(<<"key">>, Row),
+    Value = kz_json:get_value(<<"value">>, Row),
+    kz_json:set_value(Key, Value, JObj).
 
 %%--------------------------------------------------------------------
 %% @public
@@ -160,13 +200,81 @@ base_service_object(AccountId, AccountJObj) ->
     lists:foldl(fun({F, V}, J) -> F(J, V) end
                ,BaseJObj
                ,[{fun kzd_services:set_status/2, kzd_services:status_good()}
-                ,{fun kzd_services:set_is_reseller/2, depreciated_is_reseller(AccountJObj)}
+                ,{fun kzd_services:set_is_reseller/2, kzd_services:is_reseller(AccountJObj)}
                 ,{fun kzd_services:set_reseller_id/2, ResellerId}
                 ,{fun kzd_services:set_tree/2, kz_account:tree(AccountJObj)}
                 ,{fun kzd_services:set_billing_id/2, depreciated_billing_id(AccountJObj)}
                 ,{fun kzd_services:set_quantities/2, kz_json:new()}
                 ,{fun kzd_services:set_plans/2, populate_service_plans(AccountJObj, ResellerId)}
                 ]).
+
+-spec populate_service_plans(kz_json:object(), ne_binary()) -> kz_json:object().
+populate_service_plans(JObj, ResellerId) ->
+    Plans = incorporate_default_service_plan(ResellerId, master_default_service_plan()),
+    incorporate_depreciated_service_plans(Plans, JObj).
+
+-spec master_default_service_plan() -> kz_json:object().
+master_default_service_plan() ->
+    case master_account_id() of
+        {'error', _} -> kz_json:new();
+        {'ok', MasterAccountId} ->
+            incorporate_default_service_plan(MasterAccountId, kz_json:new())
+    end.
+
+-spec incorporate_default_service_plan(ne_binary(), kz_json:object()) -> kz_json:object().
+incorporate_default_service_plan(ResellerId, JObj) ->
+    case depreciated_default_service_plan_id(ResellerId) of
+        'undefined' ->
+            incorporate_only_default_service_plan(ResellerId, JObj);
+        PlanId ->
+            maybe_augment_with_plan(ResellerId, JObj, PlanId)
+    end.
+
+-spec depreciated_default_service_plan_id(ne_binary()) -> api_binary().
+depreciated_default_service_plan_id(ResellerId) ->
+    case fetch_account(ResellerId) of
+        {'ok', JObj} -> kz_json:get_value(?DEFAULT_PLAN, JObj);
+        {'error', _R} ->
+            lager:debug("unable to open reseller ~s account definition: ~p", [ResellerId, _R]),
+            'undefined'
+    end.
+
+-spec incorporate_only_default_service_plan(ne_binary(), kz_json:object()) -> kz_json:object().
+incorporate_only_default_service_plan(ResellerId, JObj) ->
+    maybe_augment_with_plan(ResellerId, JObj, default_service_plan_id(ResellerId)).
+
+maybe_augment_with_plan(_ResellerId, JObj, 'undefined') -> JObj;
+maybe_augment_with_plan(ResellerId, JObj, PlanId) ->
+    Plan = kz_json:from_list(
+             [{<<"account_id">>, ResellerId}]
+            ),
+    kz_json:set_value(PlanId, Plan, JObj).
+
+-spec incorporate_depreciated_service_plans(kz_json:object(), kz_json:object()) -> kz_json:object().
+incorporate_depreciated_service_plans(Plans, JObj) ->
+    PlanIds = kz_json:get_value(?SERVICES_PVT_PLANS, JObj),
+    ResellerId = kzd_services:reseller_id(JObj),
+    case kz_term:is_empty(PlanIds)
+        orelse kz_term:is_empty(ResellerId)
+    of
+        'true' -> Plans;
+        'false' ->
+            lists:foldl(fun(PlanId, Ps) ->
+                                maybe_augment_with_plan(ResellerId, Ps, PlanId)
+                        end
+                       ,Plans
+                       ,PlanIds
+                       )
+    end.
+
+-spec default_service_plan_id(ne_binary()) -> api_binary().
+default_service_plan_id(ResellerId) ->
+    case fetch_services_doc(ResellerId, true) of
+        {'ok', JObj} -> kz_json:get_value(?DEFAULT_PLAN, JObj);
+        {'error', _R} ->
+            lager:debug("unable to open reseller ~s services: ~p", [ResellerId, _R]),
+            'undefined'
+    end.
 
 %%--------------------------------------------------------------------
 %% @public
@@ -1438,92 +1546,6 @@ depreciated_billing_id(JObj, AccountId) ->
     case ?SUPPORT_BILLING_ID of
         'true' -> kzd_services:billing_id(JObj, AccountId);
         'false' -> AccountId
-    end.
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% determine if pvt_reseller is currently set on the account
-%% definition as this will be depreciated in the future.
-%% @end
-%%--------------------------------------------------------------------
--spec depreciated_is_reseller(kz_json:object()) -> boolean().
-depreciated_is_reseller(JObj) ->
-    kzd_services:is_reseller(JObj).
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% determine what service plans are currently set on the account
-%% definition as this will be depreciated in the future.
-%% @end
-%%--------------------------------------------------------------------
--spec populate_service_plans(kz_json:object(), ne_binary()) -> kz_json:object().
-populate_service_plans(JObj, ResellerId) ->
-    Plans = incorporate_default_service_plan(ResellerId, master_default_service_plan()),
-    incorporate_depreciated_service_plans(Plans, JObj).
-
--spec default_service_plan_id(ne_binary()) -> api_binary().
-default_service_plan_id(ResellerId) ->
-    case fetch_services_doc(ResellerId, true) of
-        {'ok', JObj} -> kz_json:get_value(?DEFAULT_PLAN, JObj);
-        {'error', _R} ->
-            lager:debug("unable to open reseller ~s services: ~p", [ResellerId, _R]),
-            'undefined'
-    end.
-
--spec depreciated_default_service_plan_id(ne_binary()) -> api_binary().
-depreciated_default_service_plan_id(ResellerId) ->
-    case fetch_account(ResellerId) of
-        {'ok', JObj} -> kz_json:get_value(?DEFAULT_PLAN, JObj);
-        {'error', _R} ->
-            lager:debug("unable to open reseller ~s account definition: ~p", [ResellerId, _R]),
-            'undefined'
-    end.
-
--spec master_default_service_plan() -> kz_json:object().
-master_default_service_plan() ->
-    case master_account_id() of
-        {'error', _} -> kz_json:new();
-        {'ok', MasterAccountId} ->
-            incorporate_default_service_plan(MasterAccountId, kz_json:new())
-    end.
-
--spec incorporate_default_service_plan(ne_binary(), kz_json:object()) -> kz_json:object().
-incorporate_default_service_plan(ResellerId, JObj) ->
-    case depreciated_default_service_plan_id(ResellerId) of
-        'undefined' ->
-            incorporate_only_default_service_plan(ResellerId, JObj);
-        PlanId ->
-            maybe_augment_with_plan(ResellerId, JObj, PlanId)
-    end.
-
--spec incorporate_only_default_service_plan(ne_binary(), kz_json:object()) -> kz_json:object().
-incorporate_only_default_service_plan(ResellerId, JObj) ->
-    maybe_augment_with_plan(ResellerId, JObj, default_service_plan_id(ResellerId)).
-
-maybe_augment_with_plan(_ResellerId, JObj, 'undefined') -> JObj;
-maybe_augment_with_plan(ResellerId, JObj, PlanId) ->
-    Plan = kz_json:from_list(
-             [{<<"account_id">>, ResellerId}
-             ]),
-    kz_json:set_value(PlanId, Plan, JObj).
-
--spec incorporate_depreciated_service_plans(kz_json:object(), kz_json:object()) -> kz_json:object().
-incorporate_depreciated_service_plans(Plans, JObj) ->
-    PlanIds = kz_json:get_value(?SERVICES_PVT_PLANS, JObj),
-    ResellerId = kzd_services:reseller_id(JObj),
-    case kz_term:is_empty(PlanIds)
-        orelse kz_term:is_empty(ResellerId)
-    of
-        'true' -> Plans;
-        'false' ->
-            lists:foldl(fun(PlanId, Ps) ->
-                                maybe_augment_with_plan(ResellerId, Ps, PlanId)
-                        end
-                       ,Plans
-                       ,PlanIds
-                       )
     end.
 
 %%--------------------------------------------------------------------
