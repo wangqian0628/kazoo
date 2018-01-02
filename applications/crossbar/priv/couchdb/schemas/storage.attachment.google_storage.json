@@ -27,8 +27,8 @@
                 {
                     "properties": {
                         "oauth_doc_id": {
-                            "description": "Doc ID in the system 'auth' database",
-                            "type": "string"
+                            "$ref": "storage.attachments.oauth",
+                            "description": "Doc ID in the system 'auth' database"
                         }
                     },
                     "required": [

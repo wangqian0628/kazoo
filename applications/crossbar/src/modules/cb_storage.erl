@@ -162,10 +162,20 @@ resource_exists(?PLANS_TOKEN, _PlanId) -> 'true'.
 %%--------------------------------------------------------------------
 -spec validate(cb_context:context()) -> cb_context:context().
 validate(Context) ->
-    lager:notice("validate.error_code: ~p", [cb_context:resp_error_code(Context)]),
     ReqVerb = cb_context:req_verb(Context),
     Context1 = validate_storage(set_scope(Context), ReqVerb),
-    maybe_check_storage_credentials(Context1, ReqVerb).
+                                                %ReqData = cb_context:req_data(Context1),
+                                                %Atts = kz_json:get_value(<<"attachments">>, ReqData),
+                                                %kz_json:foreach(
+                                                %  fun({_AttId, StorageConfig}) ->
+                                                %    lager:notice("~nStorageConfig: ~p", [StorageConfig]),
+                                                %    %Response = kz_json_schema:validate(<<"storage.attachment.common_properties">>, Settings),
+                                                %    Response = kz_json_schema:validate(<<"storage.attachment.common_properties">>, StorageConfig),
+                                                %    lager:debug("Validation resp: ~p", [Response])
+                                                %  end
+                                                %, Atts
+                                                %),
+    maybe_check_storage_settings(Context1, ReqVerb).
 
 -spec validate(cb_context:context(), path_token()) -> cb_context:context().
 validate(Context, ?PLANS_TOKEN) ->
@@ -212,10 +222,12 @@ validate_storage_plan(Context, PlanId, ?HTTP_DELETE) ->
 %%--------------------------------------------------------------------
 -spec put(cb_context:context()) -> cb_context:context().
 put(Context) ->
+    lager:notice("logging from cb_storage.put/1"),
     crossbar_doc:save(Context).
 
 -spec put(cb_context:context(), path_token()) -> cb_context:context().
 put(Context, ?PLANS_TOKEN) ->
+    lager:notice("logging from cb_storage.put/2"),
     crossbar_doc:save(Context).
 
 %%--------------------------------------------------------------------
@@ -416,61 +428,93 @@ doc_id({'reseller_plans', _AccountId}) -> 'undefined';
 doc_id({'reseller_plan', PlanId, _AccountId}) -> PlanId;
 doc_id(Context) -> doc_id(scope(Context)).
 
--spec maybe_check_storage_credentials(cb_context:context(), ne_binary()) -> cb_context:context().
-maybe_check_storage_credentials(Context, ReqVerb) when ReqVerb =:= ?HTTP_PUT;
-                                                       ReqVerb =:= ?HTTP_POST;
-                                                       ReqVerb =:= ?HTTP_PATCH ->
-    lager:notice("error_code: ~p", [cb_context:resp_error_code(Context)]),
+-spec maybe_check_storage_settings(cb_context:context(), kz_term:ne_binary()) ->
+                                          cb_context:context().
+maybe_check_storage_settings(Context, ReqVerb) when ReqVerb =:= ?HTTP_PUT
+                                                    orelse ReqVerb =:= ?HTTP_POST
+                                                    orelse ReqVerb =:= ?HTTP_PATCH ->
     case cb_context:resp_status(Context) of
-      'success' ->
-        RespData = cb_context:resp_data(Context),
-        DbName = cb_context:account_db(Context),
-        DocId = doc_id(Context),
-        AName = <<"test_credentials_file.txt">>,
-        Contents = kz_binary:rand_hex(16),
-        Atts = kz_json:get_value(<<"attachments">>, RespData),
-        ContextRecordInfo =
-          lists:zip(record_info(fields, cb_context), tl(tuple_to_list(Context))),
-        error_logger:info_msg("ContextRecordInfo: ~p", [ContextRecordInfo]),
-        lager:notice("RespData: ~p", [RespData]),
-        lager:notice("Keys: ~p~nAtts: ~p", [kz_json:get_keys(RespData), Atts]),
-        kz_json:foldl(
-          fun(AttId, Att, ContextAcc) ->
-              Handler = kz_json:get_value(<<"handler">>, Att),
-              Settings = kz_json:to_map(kz_json:get_value(<<"settings">>, Att)),
-              AttHandler = kz_term:to_atom(<<"kz_att_", Handler/binary>>),
-              Fun = fun(BinKey, SettingsAcc) ->
-                        AtomKey = kz_term:to_atom(BinKey),
-                        SettingsAcc#{AtomKey => maps:get(BinKey, Settings)}
-                    end,
-              AttSettings = lists:foldl(Fun, #{} , maps:keys(Settings)),
-              Opts = [{'plan_override', #{'att_handler' => {AttHandler, AttSettings}}}],
-              case kz_datamgr:put_attachment(DbName, DocId, AName, Contents, Opts) of
-                  {ok, _} ->
-                      ContextAcc;
-                  {error, Reason} when is_tuple(Reason) ->
-                      lager:notice("error_code: ~p", [cb_context:resp_error_code(Context)]),
-                      NewReason = [kz_term:to_binary(Term) ||
-                                   Term <- tuple_to_list(Reason)],
-                      Property = kz_json:get_value(<<"name">>, Att, AttId),
-                      cb_context:add_validation_error([<<"attachments">>, Property]
-                                                     ,<<"invalid">>
-                                                     ,NewReason
-                                                     ,ContextAcc
-                                                     );
-                  {error, Reason} ->
-                      Property = kz_json:get_value(<<"name">>, Att, AttId),
-                      cb_context:add_validation_error([<<"attachments">>, Property]
-                                                     ,<<"invalid">>
-                                                     ,kz_json:to_binary(Reason)
-                                                     ,ContextAcc
-                                                     )
-              end
-          end,
-          Context,
-          Atts);
-      _ ->
-        Context
+        'success' ->
+            lager:debug("Validating storage settings"),
+            Doc = cb_context:doc(Context),
+            DbName = kz_util:format_account_db(cb_context:account_id(Context)),
+            DocId = doc_id(Context),
+            %% Files content will differ at least on this value and also this `Random'
+            %% value is used to make sure we always send unique attachment names when
+            %% testing storage settings.
+            Random = kz_binary:rand_hex(16),
+            Content = <<"some random content: ", Random/binary>>,
+            AName = <<Random/binary, "_test_credentials_file.txt">>,
+            kz_json:foldl(
+              fun(AttId, Att, ContextAcc) ->
+                      Handler = kz_json:get_value(<<"handler">>, Att),
+                      Settings = kz_json:get_value(<<"settings">>, Att),
+                      AttHandler = kz_term:to_atom(<<"kz_att_", Handler/binary>>, 'true'),
+                      AttSettings = kz_maps:keys_to_atoms(Settings),
+                      Opts = [{'plan_override', #{'att_handler' => {AttHandler, AttSettings}
+                                                 ,'att_post_handler' => 'external'
+                                                 }}],
+                      %% Check the storage settings have permissions to create files
+                      case kz_datamgr:put_attachment(DbName, DocId, AName, Content, Opts) of
+                          {'ok', _CreatedDoc, _CreatedProps} ->
+                              %% Check the storage settings have permissions to read files
+                              case kz_datamgr:fetch_attachment(DbName, DocId, AName, Opts) of
+                                  {'ok', _Content} ->
+                                      ContextAcc;
+                                  Error ->
+                                      add_att_settings_validation_error(AttId, Error, ContextAcc)
+                              end;
+                          Error ->
+                              add_att_settings_validation_error(AttId, Error, ContextAcc)
+                      end
+              end,
+              Context,
+              kz_json:get_value(<<"attachments">>, Doc));
+        _ ->
+            Context
     end;
-maybe_check_storage_credentials(Context, _ReqVerb) ->
+maybe_check_storage_settings(Context, _ReqVerb) ->
     Context.
+
+-spec add_att_settings_validation_error(kz_term:ne_binary()
+                                       ,gen_attachment:error_response() | kz_datamgr:data_error()
+                                        %{'error', integer() | atom() | tuple()} |
+                                        %{ok, string(), _, _}
+                                       ,cb_context:context()
+                                       ) -> cb_context:context().
+%% Start error normalization
+%add_att_settings_validation_error(AttId, {'error', {Atom, Body}}, Context) % kz_dtmgr error
+%  when is_atom(Atom) ->
+%    %Reason = <<(kz_term:to_binary(Atom))/binary, ": ", (kz_term:to_binary(Body))/binary>>,
+%    AtomBin = kz_term:to_binary(Atom),
+%    BodyBin = kz_term:to_binary(Body),
+%    Reason = <<AtomBin/binary, ": ", BodyBin/binary>>,
+%    add_att_settings_validation_error(AttId, {'error', 400, Reason}, Context);
+add_att_settings_validation_error(AttId, {'error', {Code, Body}}, Context) % kz_dtmgr error
+  when is_integer(Code) ->
+    add_att_settings_validation_error(AttId, {'error', Code, kz_term:to_binary(Body)}, Context);
+add_att_settings_validation_error(AttId, {'error', Code, Body}, Context) % kz_dtmgr error
+  when is_atom(Body) ->
+    add_att_settings_validation_error(AttId, {'error', Code, kz_term:to_binary(Body)}, Context);
+add_att_settings_validation_error(AttId, {'error', Atom}, Context) % kz_dtmgr error
+  when is_atom(Atom) ->
+    add_att_settings_validation_error(AttId, {'error', 400, kz_term:to_binary(Atom)}, Context);
+add_att_settings_validation_error(AttId, {'ok', Code, _Headers, Body}, Context) -> % kz_dtmgr error
+    add_att_settings_validation_error(AttId, {'error', Code, Body}, Context);
+%% End error normalization
+add_att_settings_validation_error(AttId, {'error', ErrorCode, ErrorBody}, Context) -> % kz_att_handler error
+    EmptyJObj = kz_json:new(),
+    %% Some attachment handlers return a binary string as the value for `ErrorBody`
+    %% variable, some other return an encoded JSON object which is also a binary value but
+    %% if you pass a binary string to kz_json:decode/1 you will get an empty object.
+    NewErrorBody = case kz_json:decode(ErrorBody) of
+                       EmptyJObj -> ErrorBody;
+                       DecodedErrorBody -> DecodedErrorBody
+                   end,
+    Error = [{<<"error_code">>, ErrorCode}, {<<"error_body">>, NewErrorBody}],
+    Reason = kz_json:insert_values(Error, kz_json:new()),
+    cb_context:add_validation_error([<<"attachments">>, AttId]
+                                   ,<<"invalid">>
+                                   ,Reason
+                                   ,Context
+                                   ).

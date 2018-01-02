@@ -1091,11 +1091,9 @@ put_attachment(DbName, DocId, AName, Contents) ->
 put_attachment(DbName, {DocType, DocId}, AName, Contents, Options) ->
     put_attachment(DbName, DocId, AName, Contents, maybe_add_doc_type(DocType, Options));
 put_attachment(DbName, DocId, AName, Contents, Options) when ?VALID_DBNAME(DbName) ->
-    lager:notice("kz_datamgr.put_attachment \\o/"),
     case attachment_options(DbName, DocId, Options) of
         {'ok', NewOpts} ->
             NewOptions = props:delete('plan_override', NewOpts),
-            lager:debug("kz_datamgr.put_attachment.NewOptions: ~p", [NewOptions]),
             kzs_attachments:put_attachment(kzs_plan:plan(DbName, NewOpts), DbName, DocId, AName, Contents, NewOptions);
         {'error', _} = Error -> Error
     end;

@@ -1,4 +1,4 @@
--module(kz_attachment).
+-module(gen_attachment).
 
 -include("kz_att.hrl").
 

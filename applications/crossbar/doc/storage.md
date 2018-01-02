@@ -89,23 +89,20 @@ Key | Description | Type | Default | Required | Support Level
 schema for dropbox attachment entry
 
 
-Key | Description | Type | Default | Required | Support Level
---- | ----------- | ---- | ------- | -------- | -------------
-`handler` | What handler module to use | `string('dropbox')` |   | `true` |  
-`settings.oauth_doc_id` | Doc ID in the system 'auth' database | `string()` |   | `true` |  
-`settings` | Settings for the DropBox account | `object()` |   | `true` |  
+Key | Description | Type | Default | Required
+--- | ----------- | ---- | ------- | --------
+`handler` | What handler module to use | `string('dropbox')` |   | `true`
+`settings` | Settings for the DropBox account | [#/definitions/storage.attachment.settings](#storageattachment.settings) |   | `true`
 
 ##### storage.attachment.google_drive
 
 schema for google drive attachment entry
 
 
-Key | Description | Type | Default | Required | Support Level
---- | ----------- | ---- | ------- | -------- | -------------
-`handler` | What handler module to use | `string('google_drive')` |   | `true` |  
-`settings.folder_id` | Folder ID in which to store the file, if any | `string()` |   | `false` |  
-`settings.oauth_doc_id` | Doc ID in the system 'auth' database | `string()` |   | `true` |  
-`settings` | Settings for the Google Drive account | `object()` |   | `true` |  
+Key | Description | Type | Default | Required
+--- | ----------- | ---- | ------- | --------
+`handler` | What handler module to use | `string('google_drive')` |   | `true`
+`settings` | Settings for the Google Drive account | [#/definitions/storage.attachment.settings](#storageattachment.settings) |   | `true`
 
 ##### storage.attachment.google_storage
 
@@ -128,18 +125,27 @@ Key | Description | Type | Default | Required | Support Level
 `settings.oauth_doc_id` | Doc ID in the system 'auth' database | `string()` |   | `true` |  
 `settings` | Settings for the OneDrive account | `object()` |   | `true` |  
 
+##### storage.attachment.settings
+
+Schema properties for oauth authentication for storage attachments
+
+
+Key | Description | Type | Default | Required
+--- | ----------- | ---- | ------- | --------
+`oauth_doc_id` | Doc ID in the system 'auth' database | `string()` |   | `true`
+
 ##### storage.attachments
 
 Keys are 32-character identifiers to be used in storage plans
 
 
-Key | Description | Type | Default | Required | Support Level
---- | ----------- | ---- | ------- | -------- | -------------
-`^[a-z,0-9]{32}$.field_list` | list of field to compose destination url | `array()` |   | `false` |  
-`^[a-z,0-9]{32}$.field_separator` | toplevel, field separator to compose destination url | `string()` |   | `false` |  
-`^[a-z,0-9]{32}$.folder_base_path` | base folder path | `string()` |   | `false` |  
-`^[a-z,0-9]{32}$.name` | Friendly name for this configuration | `string()` |   | `false` |  
-`^[a-z,0-9]{32}$` | Configuration for the supported storage backends | `object()` |   | `false` |  
+Key | Description | Type | Default | Required
+--- | ----------- | ---- | ------- | --------
+`^[a-z0-9]{32}$.field_list` | list of field to compose destination url | `array()` |   | `false`
+`^[a-z0-9]{32}$.field_separator` | toplevel, field separator to compose destination url | `string()` |   | `false`
+`^[a-z0-9]{32}$.folder_base_path` | base folder path | `string()` |   | `false`
+`^[a-z0-9]{32}$.name` | Friendly name for this configuration | `string()` |   | `false`
+`^[a-z0-9]{32}$` | Configuration for the supported storage backends | `object()` |   | `false`
 
 ##### storage.connection.couchdb
 

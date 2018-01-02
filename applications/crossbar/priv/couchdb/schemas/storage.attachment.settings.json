@@ -1,0 +1,16 @@
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "_id": "storage.attachment.settings",
+    "description": "Schema properties for oauth authentication for storage attachments",
+    "properties": {
+        "oauth_doc_id": {
+            "description": "Doc ID in the system 'auth' database",
+            "kazoo-validation": true,
+            "type": "string"
+        }
+    },
+    "required": [
+        "oauth_doc_id"
+    ],
+    "type": "object"
+}

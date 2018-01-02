@@ -194,7 +194,8 @@ validate(<<_/binary>> = Schema, DataJObj, Options) ->
     {'ok', SchemaJObj} = Fun(Schema),
     validate(SchemaJObj, DataJObj, Options);
 validate(SchemaJObj, DataJObj, Options0) when is_list(Options0) ->
-    jesse:validate_with_schema(SchemaJObj, DataJObj, Options0 ++ ?DEFAULT_OPTIONS).
+    Options = props:insert_values(?DEFAULT_OPTIONS, Options0),
+    jesse:validate_with_schema(SchemaJObj, DataJObj, Options).
 
 -type option() :: {'version', kz_term:ne_binary()} |
                   {'error_code', integer()} |
@@ -650,8 +651,10 @@ error_to_jobj({'data_invalid'
     lager:debug("failed value: ~p", [_FailedValue]),
     lager:debug("failed keypath: ~p", [FailedKeyPath]),
     validation_error(FailedKeyPath
-                    ,kz_term:to_binary(FailMsg)
-                    ,kz_json:from_list([{<<"message">>, <<"failed to validate">>}])
+                    %,kz_term:to_binary(FailMsg)
+                    ,<<"invalid">>
+                    %,kz_json:from_list([{<<"message">>, <<"failed to validate">>}])
+                    ,kz_json:from_list([{<<"message">>, kz_term:to_binary(FailMsg)}])
                     ,Options
                     );
 error_to_jobj({'schema_invalid'
@@ -809,7 +812,6 @@ build_validate_error(Property, Code, Message, Options) ->
 
     Key = kz_binary:join(Property, <<".">>),
 
-    lager:notice("Options: ~p", [Options]),
     {props:get_value('error_code', Options)
     ,props:get_value('error_message', Options)
     ,kz_json:set_values([{[Key, Code], Error}], kz_json:new())

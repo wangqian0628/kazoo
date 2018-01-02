@@ -1,5 +1,5 @@
 %%%-------------------------------------------------------------------
-%%% @copyright (C) 2014-2018, 2600Hz INC
+%%% @copyright (C) 2014-2017, 2600Hz INC
 %%% @doc
 %%% Module for extending schema validation
 %%% @end
@@ -84,6 +84,16 @@ extra_validation(<<"storage.plan.database.attachment.handler">>, Value, State) -
                                                   ,?INVALID_STORAGE_ATTACHMENT_REFERENCE(Value)
                                                   ,State
                                                   )
+    end;
+extra_validation(<<"storage.attachment.settings.oauth_doc_id">>, Value, State) ->
+    lager:debug("Validating oauth_doc_id: ~s", [Value]),
+    case kz_datamgr:open_doc(<<"system_auth">>, Value) of
+        {ok, _Obj} ->
+            State;
+        {error, not_found} ->
+            ErrorMsg = <<"Invalid oauth_doc_id: ", Value/binary>>,
+            lager:debug("~s", [ErrorMsg]),
+            jesse_error:handle_data_invalid('external_error', ErrorMsg, State)
     end;
 extra_validation(_Key, _Value, State) ->
     lager:debug("extra validation of ~s not handled for value ~p", [_Key, _Value]),
