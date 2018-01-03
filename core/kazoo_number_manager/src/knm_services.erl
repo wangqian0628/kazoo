@@ -59,7 +59,7 @@ activate_feature(Number, {Feature,FeatureData}, BillingId, Services) ->
     TotalCharges = Charges + Units,
 
     case TotalCharges =:= 0
-        orelse kz_services:check_bookkeeper(BillingId, TotalCharges) of
+        orelse kz_services_bookkeeper:check_bookkeeper(BillingId, TotalCharges) of
         'false' ->
             lager:error("not enough credit to activate feature '~s' for $~p ($~p)"
                        ,[Feature, wht_util:units_to_dollars(Units), wht_util:units_to_dollars(TotalCharges)]),
@@ -146,7 +146,7 @@ update_services(T=#{todo := Ns, options := Options}) ->
                 andalso kz_services:reconcile(PrevAssignedTo, <<"phone_numbers">>),
             Services = do_fetch_services(AssignedTo),
             _ = AssignedTo =/= undefined
-                andalso kz_services:commit_transactions(Services, knm_numbers:transactions(T)),
+                andalso kz_services_bookkeeper:commit_transactions(Services, knm_numbers:transactions(T)),
             knm_numbers:ok(Ns, T#{services => Services})
     end.
 -endif.
@@ -181,7 +181,7 @@ do_activate(T, ToActivate, BillingId, AssignedTo) ->
     {Nums, Ns, ListOfUnits} = lists:unzip3(ToActivate),
     Units = lists:sum(ListOfUnits),
     TotalCharges = activation_charges(T) + Units,
-    case kz_services:check_bookkeeper(BillingId, TotalCharges) of
+    case kz_services_bookkeeper:check_bookkeeper(BillingId, TotalCharges) of
         false ->
             Message =
                 iolist_to_binary(

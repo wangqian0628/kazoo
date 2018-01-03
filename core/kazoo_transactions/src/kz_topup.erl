@@ -161,7 +161,7 @@ top_up(AccountId, Amount) ->
     Transaction1 = kz_transaction:set_reason(wht_util:topup(), Transaction),
 
     lager:info("attemptting to top up account ~s for ~p", [AccountId, Amount]),
-    case kz_services:charge_transactions(Services, [Transaction1]) of
+    case kz_services_bookkeeper:charge_transactions(Services, [Transaction1]) of
         [] ->
             lager:info("account ~s top up successfully for ~p", [AccountId, Amount]),
             case kz_transaction:save(kz_transaction:set_type(<<"credit">>, Transaction1)) of

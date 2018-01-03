@@ -44,7 +44,7 @@ maybe_dry_run(Context, Callback, Type, Props, 'true') ->
     BillingId = kz_services:get_billing_id(cb_context:account_id(Context)),
     Transactions = accepting_charges(Context, RespJObj),
     Amount = lists:sum([kz_transaction:amount(Transaction) || Transaction <- Transactions]),
-    case kz_services:check_bookkeeper(BillingId, Amount) of
+    case kz_services_bookkeeper:check_bookkeeper(BillingId, Amount) of
         'true' ->
             commit_transactions(Context, Transactions, UpdatedServices, Callback);
         'false' ->
@@ -81,7 +81,7 @@ accepting_charges(Context, JObj) ->
 
 -spec commit_transactions(cb_context:context(), kz_transaction:transactions(), kz_services:services(), callback()) -> cb_context:context().
 commit_transactions(Context, Transactions, Services, Callback) ->
-    case kz_services:commit_transactions(Services, Transactions) of
+    case kz_services_bookkeeper:commit_transactions(Services, Transactions) of
         'ok' -> save_an_audit_log(Context, Services),
                 Callback();
         'error' -> cb_context:add_system_error('datastore_fault', Context)

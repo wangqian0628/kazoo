@@ -242,7 +242,7 @@ reconcile(Account) ->
 sync(Account) when not is_binary(Account) ->
     sync(kz_term:to_binary(Account));
 sync(Account) ->
-    _ = kz_services:sync(Account),
+    _ = kz_services_bookkeeper:sync(Account),
     'ok'.
 
 -spec sync_descendants(text()) -> 'ok'.

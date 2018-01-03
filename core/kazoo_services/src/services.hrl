@@ -28,6 +28,29 @@
                                                        ))
        ).
 
+-record(kz_services, {account_id :: api_binary()
+                     ,billing_id :: api_binary()
+                     ,current_billing_id :: api_binary()
+                     ,dirty = 'false' :: boolean()
+                     ,deleted = 'false' :: boolean()
+                     ,status = kzd_services:status_good() :: ne_binary()
+                     ,jobj = kz_json:new() :: kz_json:object()
+                     ,updates = kz_json:new() :: kz_json:object()
+                     ,cascade_quantities = kz_json:new() :: kz_json:object()
+                     }).
+
+-type services() :: #kz_services{}.
+
+-type bookkeeper() :: 'kz_bookkeeper_braintree' |
+                      'kz_bookkeeper_local' |
+                      'kz_bookkeeper_http'.
+
+-export_type([services/0
+             ,bookkeeper/0
+             ]).
+
+
+
 -ifdef(TEST).
 -define(A_MASTER_ACCOUNT_ID, <<"master_3dd0df9f3b3940b8a972c0e43">>).
 -define(A_MASTER_ACCOUNT_DB, <<"account%2Fma%2Fst%2Fer_3dd0df9f3b3940b8a972c0e43">>).

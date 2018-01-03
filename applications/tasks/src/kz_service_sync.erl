@@ -290,7 +290,7 @@ bump_modified(JObj) ->
 -spec maybe_follow_sync_billing_id(ne_binary(), kzd_services:doc()) -> kz_std_return().
 maybe_follow_sync_billing_id(AccountId, ServicesJObj) ->
     case kz_services:get_billing_id(AccountId, ServicesJObj) of
-        AccountId -> kz_services:sync(AccountId, ServicesJObj);
+        AccountId -> kz_services_bookkeeper:sync(AccountId, ServicesJObj);
         BillingId -> follow_sync_billing_id(BillingId, AccountId, ServicesJObj)
     end.
 
