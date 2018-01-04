@@ -23,7 +23,7 @@
         ,req_event_type/0
         ]).
 
--include_lib("amqp_util.hrl").
+-include_lib("kz_amqp_util.hrl").
 
 -define(KEY_AUTHN_REQ, <<"authn.req">>). %% corresponds to the authn_req/1 api call
 
@@ -151,12 +151,12 @@ error_v(JObj) -> error_v(kz_json:to_proplist(JObj)).
 -spec bind_q(kz_term:ne_binary(), kz_term:proplist()) -> 'ok'.
 bind_q(Q, Props) ->
     Realm = props:get_value('realm', Props, <<"*">>),
-    amqp_util:bind_q_to_callmgr(Q, get_authn_req_routing(Realm)).
+    kz_amqp_util:bind_q_to_callmgr(Q, get_authn_req_routing(Realm)).
 
 -spec unbind_q(kz_term:ne_binary(), kz_term:proplist()) -> 'ok'.
 unbind_q(Q, Props) ->
     Realm = props:get_value('realm', Props, <<"*">>),
-    amqp_util:unbind_q_from_callmgr(Q, get_authn_req_routing(Realm)).
+    kz_amqp_util:unbind_q_from_callmgr(Q, get_authn_req_routing(Realm)).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -165,7 +165,7 @@ unbind_q(Q, Props) ->
 %%--------------------------------------------------------------------
 -spec declare_exchanges() -> 'ok'.
 declare_exchanges() ->
-    amqp_util:callmgr_exchange().
+    kz_amqp_util:callmgr_exchange().
 
 %%--------------------------------------------------------------------
 %% @doc Publish the JSON iolist() to the proper Exchange
@@ -179,7 +179,7 @@ publish_req(JObj) ->
 -spec publish_req(kz_term:api_terms(), binary()) -> 'ok'.
 publish_req(Req, ContentType) ->
     {ok, Payload} = kz_api:prepare_api_payload(Req, ?AUTHN_REQ_VALUES, fun req/1),
-    amqp_util:callmgr_publish(Payload, ContentType, get_authn_req_routing(Req)).
+    kz_amqp_util:callmgr_publish(Payload, ContentType, get_authn_req_routing(Req)).
 
 -spec publish_resp(kz_term:ne_binary(), kz_term:api_terms()) -> 'ok'.
 publish_resp(Queue, JObj) ->
@@ -188,7 +188,7 @@ publish_resp(Queue, JObj) ->
 -spec publish_resp(kz_term:ne_binary(), kz_term:api_terms(), binary()) -> 'ok'.
 publish_resp(Queue, Resp, ContentType) ->
     {ok, Payload} = kz_api:prepare_api_payload(Resp, ?AUTHN_RESP_VALUES, fun resp/1),
-    amqp_util:targeted_publish(Queue, Payload, ContentType).
+    kz_amqp_util:targeted_publish(Queue, Payload, ContentType).
 
 -spec publish_error(kz_term:ne_binary(), kz_term:api_terms()) -> 'ok'.
 publish_error(Queue, JObj) ->
@@ -197,7 +197,7 @@ publish_error(Queue, JObj) ->
 -spec publish_error(kz_term:ne_binary(), kz_term:api_terms(), binary()) -> 'ok'.
 publish_error(Queue, Resp, ContentType) ->
     {ok, Payload} = kz_api:prepare_api_payload(Resp, ?AUTHN_ERR_VALUES, fun error/1),
-    amqp_util:targeted_publish(Queue, Payload, ContentType).
+    kz_amqp_util:targeted_publish(Queue, Payload, ContentType).
 
 %%-----------------------------------------------------------------------------
 %% @private
@@ -207,7 +207,7 @@ publish_error(Queue, Resp, ContentType) ->
 %%-----------------------------------------------------------------------------
 -spec get_authn_req_routing(kz_term:ne_binary() | kz_term:api_terms()) -> kz_term:ne_binary().
 get_authn_req_routing(Realm) when is_binary(Realm) ->
-    list_to_binary([?KEY_AUTHN_REQ, ".", amqp_util:encode(Realm)]);
+    list_to_binary([?KEY_AUTHN_REQ, ".", kz_amqp_util:encode(Realm)]);
 get_authn_req_routing(Req) ->
     get_authn_req_routing(get_auth_realm(Req)).
 

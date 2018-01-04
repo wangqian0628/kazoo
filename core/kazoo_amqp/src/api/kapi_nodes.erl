@@ -14,7 +14,7 @@
 
 -export([publish_advertise/1, publish_advertise/2]).
 
--include_lib("amqp_util.hrl").
+-include_lib("kz_amqp_util.hrl").
 
 %% Advertise message
 -define(ADVERTISE_HEADERS, [<<"Expires">>]).
@@ -65,7 +65,7 @@ advertise_v(JObj) ->
 %%--------------------------------------------------------------------
 -spec bind_q(binary(), kz_term:proplist()) -> 'ok'.
 bind_q(Queue, _Props) ->
-    amqp_util:bind_q_to_nodes(Queue).
+    kz_amqp_util:bind_q_to_nodes(Queue).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -74,7 +74,7 @@ bind_q(Queue, _Props) ->
 %%--------------------------------------------------------------------
 -spec unbind_q(binary()) -> 'ok'.
 unbind_q(Queue) ->
-    amqp_util:unbind_q_from_nodes(Queue).
+    kz_amqp_util:unbind_q_from_nodes(Queue).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -83,7 +83,7 @@ unbind_q(Queue) ->
 %%--------------------------------------------------------------------
 -spec declare_exchanges() -> 'ok'.
 declare_exchanges() ->
-    amqp_util:nodes_exchange().
+    kz_amqp_util:nodes_exchange().
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -98,4 +98,4 @@ publish_advertise(JObj) ->
 -spec publish_advertise(kz_term:api_terms(), kz_term:ne_binary()) -> 'ok'.
 publish_advertise(Advertise, ContentType) ->
     {'ok', Payload} = kz_api:prepare_api_payload(Advertise, ?ADVERTISE_VALUES, fun advertise/1),
-    amqp_util:nodes_publish(Payload, ContentType).
+    kz_amqp_util:nodes_publish(Payload, ContentType).

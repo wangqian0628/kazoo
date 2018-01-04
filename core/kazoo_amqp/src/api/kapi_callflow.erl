@@ -46,11 +46,11 @@ resume_v(JObj) -> resume_v(kz_json:to_proplist(JObj)).
 
 -spec bind_q(kz_term:ne_binary(), kz_term:proplist()) -> 'ok'.
 bind_q(Q, _Props) ->
-    amqp_util:bind_q_to_kapps(Q, ?RESUME_ROUTING_KEY).
+    kz_amqp_util:bind_q_to_kapps(Q, ?RESUME_ROUTING_KEY).
 
 -spec unbind_q(kz_term:ne_binary(), kz_term:proplist()) -> 'ok'.
 unbind_q(Q, _Props) ->
-    amqp_util:unbind_q_from_kapps(Q, ?RESUME_ROUTING_KEY).
+    kz_amqp_util:unbind_q_from_kapps(Q, ?RESUME_ROUTING_KEY).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -59,7 +59,7 @@ unbind_q(Q, _Props) ->
 %%--------------------------------------------------------------------
 -spec declare_exchanges() -> 'ok'.
 declare_exchanges() ->
-    amqp_util:kapps_exchange().
+    kz_amqp_util:kapps_exchange().
 
 %%--------------------------------------------------------------------
 %% @doc Publish the JSON iolist() to the proper Exchange
@@ -68,4 +68,4 @@ declare_exchanges() ->
 -spec publish_resume(kz_term:api_terms()) -> 'ok'.
 publish_resume(JObj) ->
     {'ok', Payload} = kz_api:prepare_api_payload(JObj, ?RESUME_VALUES, fun resume/1),
-    amqp_util:kapps_publish(?RESUME_ROUTING_KEY, Payload).
+    kz_amqp_util:kapps_publish(?RESUME_ROUTING_KEY, Payload).

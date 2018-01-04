@@ -94,7 +94,7 @@
         ,publish_originate_execute/2, publish_originate_execute/3
         ]).
 
--include("amqp_util.hrl").
+-include("kz_amqp_util.hrl").
 -include("kapi_dialplan.hrl").
 
 -spec optional_bridge_req_headers() -> kz_term:ne_binaries().
@@ -1100,7 +1100,7 @@ publish_command({CtrlQ, CtrlP}, Prop, DPApp) ->
     publish_command(CtrlQ, [{?KEY_DELIVER_TO_PID, CtrlP} | Prop], DPApp);
 publish_command(CtrlQ, Prop, DPApp) ->
     {'ok', Payload} = build_command(Prop, DPApp),
-    amqp_util:callctl_publish(CtrlQ, Payload, ?DEFAULT_CONTENT_TYPE).
+    kz_amqp_util:callctl_publish(CtrlQ, Payload, ?DEFAULT_CONTENT_TYPE).
 
 -spec build_command(kz_term:api_terms()) -> {'ok', kz_term:api_terms()}.
 build_command(Prop) when is_list(Prop) ->
@@ -1146,7 +1146,7 @@ publish_error(CallID, API, ContentType) ->
     {'ok', Payload} = kz_api:prepare_api_payload(API, [{<<"Event-Name">>, <<"dialplan">>}
                                                        | ?ERROR_RESP_VALUES
                                                       ], fun error/1),
-    amqp_util:callevt_publish(kapi_call:event_routing_key(<<"diaplan">>, CallID), Payload, ContentType).
+    kz_amqp_util:callevt_publish(kapi_call:event_routing_key(<<"diaplan">>, CallID), Payload, ContentType).
 
 -spec publish_originate_ready(kz_term:ne_binary(), kz_term:api_terms()) -> 'ok'.
 publish_originate_ready(ServerId, JObj) ->
@@ -1155,7 +1155,7 @@ publish_originate_ready(ServerId, JObj) ->
 -spec publish_originate_ready(kz_term:ne_binary(), kz_term:api_terms(), kz_term:ne_binary()) -> 'ok'.
 publish_originate_ready(ServerId, API, ContentType) ->
     {'ok', Payload} = kz_api:prepare_api_payload(API, ?ORIGINATE_READY_VALUES, fun originate_ready/1),
-    amqp_util:targeted_publish(ServerId, Payload, ContentType).
+    kz_amqp_util:targeted_publish(ServerId, Payload, ContentType).
 
 -spec publish_originate_execute(kz_term:ne_binary(), kz_term:api_terms()) -> 'ok'.
 publish_originate_execute(ServerId, JObj) ->
@@ -1164,7 +1164,7 @@ publish_originate_execute(ServerId, JObj) ->
 -spec publish_originate_execute(kz_term:ne_binary(), kz_term:api_terms(), kz_term:ne_binary()) -> 'ok'.
 publish_originate_execute(ServerId, API, ContentType) ->
     {'ok', Payload} = kz_api:prepare_api_payload(API, ?ORIGINATE_EXECUTE_VALUES, fun originate_execute/1),
-    amqp_util:targeted_publish(ServerId, Payload, ContentType).
+    kz_amqp_util:targeted_publish(ServerId, Payload, ContentType).
 
 -spec dial_method_single() -> kz_term:ne_binary().
 dial_method_single() -> ?DIAL_METHOD_SINGLE.
@@ -1174,11 +1174,11 @@ dial_method_simultaneous() -> ?DIAL_METHOD_SIMUL.
 
 -spec bind_q(kz_term:ne_binary(), kz_term:proplist()) -> 'ok'.
 bind_q(Queue, _Props) ->
-    amqp_util:bind_q_to_callctl(Queue).
+    kz_amqp_util:bind_q_to_callctl(Queue).
 
 -spec unbind_q(kz_term:ne_binary(), kz_term:proplist()) -> 'ok'.
 unbind_q(Queue, _Props) ->
-    amqp_util:unbind_q_from_callctl(Queue).
+    kz_amqp_util:unbind_q_from_callctl(Queue).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -1187,7 +1187,7 @@ unbind_q(Queue, _Props) ->
 %%--------------------------------------------------------------------
 -spec declare_exchanges() -> 'ok'.
 declare_exchanges() ->
-    amqp_util:callctl_exchange().
+    kz_amqp_util:callctl_exchange().
 
 -spec terminators(kz_term:api_binary()) -> kz_term:ne_binaries().
 terminators(Bin) when is_binary(Bin) ->

@@ -51,7 +51,7 @@ unbind_q(_, _) -> 'ok'.
 %%--------------------------------------------------------------------
 -spec declare_exchanges() -> 'ok'.
 declare_exchanges() ->
-    amqp_util:targeted_exchange().
+    kz_amqp_util:targeted_exchange().
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -66,4 +66,4 @@ publish_dialplan_req(Queue, JObj) ->
 -spec publish_dialplan_req(kz_term:ne_binary(), kz_term:api_terms(), kz_term:ne_binary()) -> 'ok'.
 publish_dialplan_req(Queue, Req, ContentType) ->
     {'ok', Payload} = kz_api:prepare_api_payload(Req, ?DIALPLAN_REQ_VALUES, fun dialplan_req/1),
-    amqp_util:targeted_publish(Queue, Payload, ContentType).
+    kz_amqp_util:targeted_publish(Queue, Payload, ContentType).
