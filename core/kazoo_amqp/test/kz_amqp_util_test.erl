@@ -1,5 +1,5 @@
 %%%-------------------------------------------------------------------
-%%% @copyright (C) 2010-2018, 2600Hz INC
+%%% @copyright (C) 2010-2017, 2600Hz INC
 %%% @doc
 %%% Utilities to facilitate AMQP interaction
 %%% @end
@@ -8,7 +8,7 @@
 %%%   Karl Anderson
 %%%   Edouard Swiac
 %%%-------------------------------------------------------------------
--module(amqp_util_test).
+-module(kz_amqp_util_test).
 
 -include_lib("eunit/include/eunit.hrl").
 
