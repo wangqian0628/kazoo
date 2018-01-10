@@ -46,25 +46,35 @@
 -type direction() :: 'ascending' | 'descending'.
 
 -type time_range() :: {kz_time:gregorian_seconds(), kz_time:gregorian_seconds()}.
+%% `{StartTimestamp, EndTimestamp}'
 
 -type api_range_key() :: 'undefined' | ['undefined'] | kazoo_data:range_key().
 -type range_keys() :: {api_range_key(), api_range_key()}.
+%% `{Startkey, EndKey}'
 
 -type keymap_fun() :: fun((cb_context:context()) -> api_range_key()) |
                       fun((cb_context:context(), kazoo_data:view_options()) -> api_range_key()).
+%% denotes `fun(Context)' or `fun(Context, ViewOptions)' to create customize start/end key
+
 -type keymap() :: api_range_key() | keymap_fun().
+%% use for creating start/end key for non-range request
 
 -type range_keymap_fun() :: fun((kz_time:gregorian_seconds()) -> api_range_key()).
+%% denotes `fun(Timestamp)' to create customize range key
+
 -type range_keymap() :: 'nil' | api_range_key() | range_keymap_fun().
+%% user `nil' if you want to bypass setting timestamp automatically and you do not want to provide `start_key'
 
 -type user_mapper_fun() :: 'undefined' |
                            fun((kz_json:objects()) -> kz_json:objects()) |
                            fun((kz_json:object(), kz_json:objects()) -> kz_json:objects()) |
                            fun((cb_context:context(), kz_json:object(), kz_json:objects()) -> kz_json:objects()).
+%% denotes user map/filter `fun/1,2,3' for {@link options()}
 
 -type mapper_fun() :: 'undefined' |
                       fun((kz_json:objects()) -> kz_json:objects()) |
                       fun((kz_json:object(), kz_json:objects()) -> kz_json:objects()).
+%% denotes a `fun/1,2' to use for filter/map view result, {@link user_mapper_fun()}
 
 -type options() :: kazoo_data:view_options() |
                    [{'databases', kz_term:ne_binaries()} |
@@ -88,6 +98,7 @@
                     {'range_key_name', kz_term:ne_binary()} |
                     {'range_start_keymap', range_keymap()}
                    ].
+%% the type of each key-value options which a crossbar module can provide to crossbar_view
 
 -type load_params() :: #{chunk_size => pos_integer()
                         ,context => cb_context:context()
@@ -108,8 +119,10 @@
                         ,view => kz_term:ne_binary()
                         ,view_options => kazoo_data:view_options()
                         }.
+%% type specification of each parameters of get_result options loop
 
 -type last_key() :: api_range_key().
+%% last key of the view result from previous iteration, also used to set `next_start_key'
 
 -export_type([range_keys/0, time_range/0
              ,options/0, direction/0

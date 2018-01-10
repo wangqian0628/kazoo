@@ -47,17 +47,30 @@
 -export([a1hash/3, floor/1, ceiling/1]).
 
 -type text() :: string() | atom() | binary() | iolist().
+%% denotes Erlang datatype which can represent as.
 
 -type atoms() :: [atom()].
+%% denotes a list of `atom'
+
 -type pids() :: [pid()].
+%% denotes a list of `pid'
+
 -type references() :: [reference()].
+%% denotes a list of `reference'
 
 -type proplist_key() :: any().
 -type proplist_value() :: any().
 -type proplist_property() :: atom() | {proplist_key(), proplist_value()}.
+%% denotes definition of each key-value in a proplist
+
 -type proplist() :: [proplist_property()].
+%% a key-value form of data, `[{Key, Value}|atom]'
+
 -type proplists() :: [proplist()].
+%% denotes a list of `proplist'
+
 -type proplist_kv(K, V) :: [{K, V}].
+%% denotes a list of key-value with given `K' as key's type and `V' as value's type
 
 -type pid_ref() :: {pid(), reference()}.
 -type pid_refs() :: [pid_ref()].
@@ -65,35 +78,80 @@
 -type api_pid_refs() :: pid_refs() | 'undefined'.
 
 -type api_terms() :: kz_json:object() | proplist().
+%% Kazoo API datatype, either an Erlang representation of JSON object or a list of key-values
+
 -type api_binary() :: binary() | 'undefined'.
+%% denotes either datatype is defined as `binary()' or it's `undefined'
+
 -type api_ne_binary() :: ne_binary() | 'undefined'.
+%% denotes either datatype is defined as {@link ne_binary()} or it's `undefined'
+
 -type api_ne_binaries() :: [api_ne_binary()] | 'undefined'.
+%% denotes either datatype is defined as {@link ne_binaries()} or it's `undefined'
+
 -type api_binaries() :: [api_binary()] | 'undefined'.
+%% denotes either datatype is defined as {@link api_binary()} or it's `undefined'
+
 -type api_object() :: kz_json:object() | 'undefined'.
+%% denotes either datatype is defined as {@link kz_json:object()} or it's `undefined'
+
 -type api_objects() :: kz_json:objects() | 'undefined'.
+%% denotes either datatype is defined as {@link kz_json:objects()} or it's `undefined'
+
 -type api_boolean() :: boolean() | 'undefined'.
+%% denotes either datatype is defined as `boolean()' or it's `undefined'
+
 -type api_atom() :: atom() | 'undefined'.
+%% denotes either datatype is defined as `atom()' or it's `undefined'
+
 -type api_atoms() :: atoms() | 'undefined'.
+%% denotes either datatype is defined as list of `atom()' or it's `undefined'
+
 -type api_string() :: string() | 'undefined'.
+%% denotes either datatype is defined as `string()' or it's `undefined'
+
 -type api_reference() :: reference() | 'undefined'.
+%% denotes either datatype is defined as `reference()' or it's `undefined'
+
 -type api_pid() :: pid() | 'undefined'.
+%% denotes either datatype is defined as `pid()' or it's `undefined'
+
 -type api_list() :: list() | 'undefined'.
+%% denotes either datatype is defined as `list()' or it's `undefined'
 
 -type api_number() :: number() | 'undefined'.
--type api_integer() :: integer() | 'undefined'.
--type api_pos_integer() :: pos_integer() | 'undefined'.
--type api_non_neg_integer() :: non_neg_integer() | 'undefined'.
--type api_float() :: float() | 'undefined'.
+%% denotes either datatype is defined as `list()' or it's `undefined'
 
--type deeplist() :: iolist(). %[any() | deeplist()].
+-type api_integer() :: integer() | 'undefined'.
+%% denotes either datatype is defined as `list()' or it's `undefined'
+
+-type api_pos_integer() :: pos_integer() | 'undefined'.
+%% denotes either datatype is defined as `list()' or it's `undefined'
+
+-type api_non_neg_integer() :: non_neg_integer() | 'undefined'.
+%% denotes either datatype is defined as `list()' or it's `undefined'
+
+-type api_float() :: float() | 'undefined'.
+%% denotes either datatype is defined as `list()' or it's `undefined'
+
+-type deeplist() :: iolist().
+%% denotes `[any()|'{@link deeplist()}`]'
 
 -type std_return() :: {'ok', any()} | {'error', any()}.
+%% Standard return type for request in Kazoo
 
 -type jobj_return() :: {'ok', kz_json:object()} | {'error', any()}.
+%% {@link std_return()} but returns {@link kz_json:object()} for success
+
 -type jobjs_return() :: {'ok', kz_json:objects()} | {'error', any()}.
+%% {@link std_return()} but returns {@link kz_json:objects()} for success
 
 -type ne_binary() :: <<_:8,_:_*8>>.
+%% denotes a binary which starts at least with 8 bits and continues to have `k' numbers of 8 bits, a non-empty binary
+
 -type ne_binaries() :: [ne_binary()].
+%% denotes a list of non-empty binaries
+
 -type binaries() :: [binary()].
 
 -type strings() :: [string()].
@@ -158,12 +216,12 @@ shuffle_list(List) when is_list(List) ->
     randomize_list(round(math:log(length(List)) + 0.5), List).
 
 -spec randomize_list(list()) -> list().
--spec randomize_list(pos_integer(), list()) -> list().
 randomize_list(List) ->
     D = lists:keysort(1, [{rand:uniform(), A} || A <- List]),
     {_, D1} = lists:unzip(D),
     D1.
 
+-spec randomize_list(pos_integer(), list()) -> list().
 randomize_list(1, List) -> randomize_list(List);
 randomize_list(T, List) ->
     lists:foldl(fun(_E, Acc) ->
@@ -185,9 +243,9 @@ to_hex_binary(S) ->
 
 
 -spec to_integer(string() | binary() | integer() | float()) -> integer().
--spec to_integer(string() | binary() | integer() | float(), 'strict' | 'notstrict') -> integer().
 to_integer(X) -> to_integer(X, 'notstrict').
 
+-spec to_integer(string() | binary() | integer() | float(), 'strict' | 'notstrict') -> integer().
 to_integer(X, _) when is_integer(X) -> X;
 to_integer(X, 'strict') when is_float(X) -> erlang:error('badarg');
 to_integer(X, 'notstrict') when is_float(X) -> round(X);
@@ -204,9 +262,9 @@ to_integer(X, S) when is_list(X) ->
     end.
 
 -spec to_float(string() | binary() | integer() | float()) -> float().
--spec to_float(string() | binary() | integer() | float(), 'strict' | 'notstrict') -> float().
 to_float(X) -> to_float(X, 'notstrict').
 
+-spec to_float(string() | binary() | integer() | float(), 'strict' | 'notstrict') -> float().
 to_float(X, _) when is_float(X) -> X;
 to_float(X, strict) when is_binary(X) -> binary_to_float(X);
 to_float(X, notstrict) when is_binary(X) ->
