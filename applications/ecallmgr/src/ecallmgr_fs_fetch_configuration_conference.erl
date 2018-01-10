@@ -83,7 +83,7 @@ maybe_convert_sound(<<"dnuos-", _/binary>>, Key, Value, Profile) ->
 maybe_convert_sound(_, _, _, Profile) -> Profile.
 
 
--spec fetch_conference_config(atom(), ne_binary(), ne_binary(), kz_json:object()) -> fs_sendmsg_ret().
+-spec fetch_conference_config(atom(), kz_term:ne_binary(), kz_term:ne_binary(), kz_json:object()) -> fs_sendmsg_ret().
 fetch_conference_config(Node, Id, <<"COMMAND">>, JObj) ->
     Profile = kz_json:get_value(<<"profile_name">>, JObj),
     Conference = kz_json:get_value(<<"conference_name">>, JObj),
@@ -122,7 +122,7 @@ handle_conference_params_response(_Error) ->
     lager:debug("failed to lookup conference params, error:~p", [_Error]),
     ecallmgr_fs_xml:not_found().
 
--spec maybe_fetch_conference_profile(atom(), ne_binary(), api_binary(), api_binary()) -> fs_sendmsg_ret().
+-spec maybe_fetch_conference_profile(atom(), kz_term:ne_binary(), kz_term:api_binary(), kz_term:api_binary()) -> fs_sendmsg_ret().
 maybe_fetch_conference_profile(Node, Id, 'undefined', _) ->
     lager:debug("failed to lookup undefined conference profile"),
     {'ok', XmlResp} = ecallmgr_fs_xml:not_found(),
@@ -135,7 +135,7 @@ maybe_fetch_conference_profile(Node, Id, Profile, _Conference) ->
     [AccountId | _] = binary:split(Profile, <<"_">>),
     fetch_conference_profile(Node, Id, Profile, AccountId).
 
--spec fetch_conference_profile(atom(), ne_binary(), api_binary(), api_binary()) -> fs_sendmsg_ret().
+-spec fetch_conference_profile(atom(), kz_term:ne_binary(), kz_term:api_binary(), kz_term:api_binary()) -> fs_sendmsg_ret().
 fetch_conference_profile(Node, Id, Profile, AccountId) ->
     Cmd = [{<<"Request">>, <<"Conference">>}
           ,{<<"Profile">>, Profile}
@@ -165,7 +165,7 @@ fetch_conference_profile(Node, Id, Profile, AccountId) ->
               end,
     send_conference_profile_xml(Node, Id, XmlResp).
 
--spec send_conference_profile_xml(atom(), ne_binary(), iolist()) -> fs_sendmsg_ret().
+-spec send_conference_profile_xml(atom(), kz_term:ne_binary(), iolist()) -> fs_sendmsg_ret().
 send_conference_profile_xml(Node, Id, XmlResp) ->
     lager:debug("sending conference profile XML to ~s: ~s", [Node, XmlResp]),
     freeswitch:fetch_reply(Node, Id, 'configuration', iolist_to_binary(XmlResp)).
