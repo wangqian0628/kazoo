@@ -91,9 +91,9 @@ main(CommandLineArgs, Loops) ->
 -spec in_kazoo(atom(), module(), atom(), kz_term:binaries()) -> no_return().
 in_kazoo(SUPName, M, F, As) ->
     kz_util:put_callid(SUPName),
-    lager:notice("~s: ~s ~s ~s", [?MODULE, M, F, kz_util:iolist_join($,, As)]),
+    lager:info("~s: ~s ~s ~s", [?MODULE, M, F, kz_util:iolist_join($,, As)]),
     R = apply(M, F, As),
-    lager:notice("~s result: ~p", [?MODULE, R]),
+    lager:info("~s result: ~p", [?MODULE, R]),
     R.
 
 -spec print_result(any(), boolean()) -> 'ok'.
@@ -227,12 +227,19 @@ stderr(Format, Things) ->
 -spec option_spec_list() -> list().
 option_spec_list() ->
     [{'help', $?, "help", 'undefined', "Show the program options"}
-    ,{'node', $n, "node", {'string', "kazoo_apps"}, "Node name"}
-    ,{'cookie', $c, "cookie", {'string', "change_me"}, "Erlang cookie"}
+    ,{'node', $n, "node", {'string', from_env("KAZOO_NODE", "kazoo_apps")}, "Node name"}
+    ,{'cookie', $c, "cookie", {'string', from_env("KAZOO_COOKIE", "change_me")}, "Erlang cookie"}
     ,{'timeout', $t, "timeout", {'integer', 0}, "Command timeout"}
     ,{'verbose', $v, "verbose", 'undefined', "Be verbose"}
     ,{'module', 'undefined', 'undefined', 'string', "The name of the remote module"}
     ,{'function', 'undefined', 'undefined', 'string', "The name of the remote module's function"}
     ].
+
+-spec from_env(list(), list()) -> list().
+from_env(Name, Default) ->
+    case os:getenv(Name) of
+        false -> Default;
+        Value -> Value
+    end.
 
 %%% End of Module

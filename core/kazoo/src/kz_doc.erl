@@ -92,7 +92,7 @@
 %% i wish we could define a binary derived type
 %% that start with something (_, pvt_) in this case
 %% keep dreaming
--type private_field() :: ne_binary().
+-type private_field() :: kz_term:ne_binary().
 -type private_fields() :: [private_field()].
 
 %%--------------------------------------------------------------------
