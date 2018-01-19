@@ -651,10 +651,8 @@ error_to_jobj({'data_invalid'
     lager:debug("failed value: ~p", [_FailedValue]),
     lager:debug("failed keypath: ~p", [FailedKeyPath]),
     validation_error(FailedKeyPath
-                    %,kz_term:to_binary(FailMsg)
-                    ,<<"invalid">>
-                    %,kz_json:from_list([{<<"message">>, <<"failed to validate">>}])
-                    ,kz_json:from_list([{<<"message">>, kz_term:to_binary(FailMsg)}])
+                    ,kz_term:to_binary(FailMsg)
+                    ,kz_json:from_list([{<<"message">>, <<"failed to validate">>}])
                     ,Options
                     );
 error_to_jobj({'schema_invalid'

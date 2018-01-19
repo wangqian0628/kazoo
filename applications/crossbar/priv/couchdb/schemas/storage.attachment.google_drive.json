@@ -11,8 +11,22 @@
             "type": "string"
         },
         "settings": {
-            "$ref": "storage.attachment.settings",
-            "description": "Settings for the Google Drive account"
+            "description": "Settings for the Google Drive account",
+            "properties": {
+                "folder_id": {
+                    "description": "Folder ID in which to store the file, if any",
+                    "type": "string"
+                },
+                "oauth_doc_id": {
+                    "description": "Doc ID in the system 'auth' database",
+                    "kazoo-validation": true,
+                    "type": "string"
+                }
+            },
+            "required": [
+                "oauth_doc_id"
+            ],
+            "type": "object"
         }
     },
     "required": [

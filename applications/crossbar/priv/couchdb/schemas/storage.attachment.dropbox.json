@@ -11,8 +11,18 @@
             "type": "string"
         },
         "settings": {
-            "$ref": "storage.attachment.settings",
-            "description": "Settings for the DropBox account"
+            "description": "Settings for the DropBox account",
+            "properties": {
+                "oauth_doc_id": {
+                    "description": "Doc ID in the system 'auth' database",
+                    "kazoo-validation": true,
+                    "type": "string"
+                }
+            },
+            "required": [
+                "oauth_doc_id"
+            ],
+            "type": "object"
         }
     },
     "required": [

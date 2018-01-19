@@ -27,8 +27,9 @@
                 {
                     "properties": {
                         "oauth_doc_id": {
-                            "$ref": "storage.attachments.oauth",
-                            "description": "Doc ID in the system 'auth' database"
+                            "description": "Doc ID in the system 'auth' database",
+                            "kazoo-validation": true,
+                            "type": "string"
                         }
                     },
                     "required": [

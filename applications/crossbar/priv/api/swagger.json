@@ -24824,7 +24824,7 @@
                                 "type": "boolean"
                             },
                             "format_from_uri": {
-                                "description": "When set to true requests to this resource gateway will have a re-formated SIP From Header",
+                                "description": "When set to true requests to this resource gateway will have a reformatted SIP From Header",
                                 "type": "boolean"
                             },
                             "from_uri_realm": {
@@ -25415,8 +25415,17 @@
                     "type": "string"
                 },
                 "settings": {
-                    "$ref": "#/definitions/storage.attachment.settings",
-                    "description": "Settings for the DropBox account"
+                    "description": "Settings for the DropBox account",
+                    "properties": {
+                        "oauth_doc_id": {
+                            "description": "Doc ID in the system 'auth' database",
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "oauth_doc_id"
+                    ],
+                    "type": "object"
                 }
             },
             "required": [
@@ -25436,8 +25445,21 @@
                     "type": "string"
                 },
                 "settings": {
-                    "$ref": "#/definitions/storage.attachment.settings",
-                    "description": "Settings for the Google Drive account"
+                    "description": "Settings for the Google Drive account",
+                    "properties": {
+                        "folder_id": {
+                            "description": "Folder ID in which to store the file, if any",
+                            "type": "string"
+                        },
+                        "oauth_doc_id": {
+                            "description": "Doc ID in the system 'auth' database",
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "oauth_doc_id"
+                    ],
+                    "type": "object"
                 }
             },
             "required": [
@@ -25473,8 +25495,9 @@
                         {
                             "properties": {
                                 "oauth_doc_id": {
-                                    "$ref": "storage.attachments.oauth",
-                                    "description": "Doc ID in the system 'auth' database"
+                                    "description": "Doc ID in the system 'auth' database",
+                                    "kazoo-validation": true,
+                                    "type": "string"
                                 }
                             },
                             "required": [
@@ -25518,19 +25541,6 @@
             "required": [
                 "handler",
                 "settings"
-            ],
-            "type": "object"
-        },
-        "storage.attachment.settings": {
-            "description": "Schema properties for oauth authentication for storage attachments",
-            "properties": {
-                "oauth_doc_id": {
-                    "description": "Doc ID in the system 'auth' database",
-                    "type": "string"
-                }
-            },
-            "required": [
-                "oauth_doc_id"
             ],
             "type": "object"
         },
