@@ -1,0 +1,187 @@
+{
+    "$schema": "http://json-schema.org/draft-03/schema#",
+    "properties": {
+        "emergency": {
+            "default": false,
+            "description": "Determines if the resource represents emergency services",
+            "name": "Emergency",
+            "type": "boolean"
+        },
+        "enabled": {
+            "default": true,
+            "description": "Determines if the resource is currently enabled",
+            "name": "Enabled",
+            "type": "boolean"
+        },
+        "flags": {
+            "default": [],
+            "description": "A list of flags that can be provided on the request and must match for the resource to be eligible",
+            "name": "Flags",
+            "type": "array"
+        },
+        "gateways": {
+            "description": "A list of gateways avaliable for this resource",
+            "items": {
+                "properties": {
+                    "bypass_media": {
+                        "default": "auto",
+                        "description": "The device bypass media mode",
+                        "enum": [
+                            "true",
+                            "false",
+                            "auto"
+                        ],
+                        "name": "Bypass Media (gateways)",
+                        "type": "string"
+                    },
+                    "codecs": {
+                        "default": [
+                            "PCMU",
+                            "PCMA"
+                        ],
+                        "description": "A list of audio codecs supported by this gateway",
+                        "items": {
+                            "properties": {
+                                "enum": [
+                                    "G729",
+                                    "PCMU",
+                                    "PCMA",
+                                    "G722_16",
+                                    "G722_32",
+                                    "CELT_48",
+                                    "CELT_64",
+                                    "Speex",
+                                    "GSM",
+                                    "OPUS",
+                                    "H261",
+                                    "H263",
+                                    "H264"
+                                ]
+                            }
+                        },
+                        "name": "Codecs (gateways)",
+                        "type": "array"
+                    },
+                    "custom_sip_headers": {
+                        "default": {},
+                        "name": "Custom SIP Header (gateways)",
+                        "type": "object"
+                    },
+                    "enabled": {
+                        "default": true,
+                        "description": "Determines if the resource gateway is currently enabled",
+                        "name": "Enabled (gateways)",
+                        "type": "boolean"
+                    },
+                    "endpoint_type": {
+                        "default": "sip",
+                        "description": "What type of endpoint is this gateway.",
+                        "enum": [
+                            "sip",
+                            "freetdm",
+                            "skype"
+                        ],
+                        "name": "Endpoint Type (gateways)",
+                        "type": "string"
+                    },
+                    "invite_format": {
+                        "default": "route",
+                        "description": "The format of the DID needed by the underlying hardware/gateway",
+                        "enum": [
+                            "route",
+                            "username",
+                            "e164",
+                            "npan",
+                            "1npan"
+                        ],
+                        "name": "Invite Format (gateways)",
+                        "type": "string"
+                    },
+                    "media": {
+                        "description": "The media parameters for the device",
+                        "properties": {
+                            "codecs": {
+                                "default": [
+                                    "PCMU",
+                                    "PCMA"
+                                ],
+                                "description": "A list of audio codecs supported by this gateway",
+                                "items": {
+                                    "properties": {
+                                        "enum": [
+                                            "G729",
+                                            "PCMU",
+                                            "PCMA",
+                                            "G722_16",
+                                            "G722_32",
+                                            "CELT_48",
+                                            "CELT_64",
+                                            "Speex",
+                                            "GSM",
+                                            "OPUS",
+                                            "H261",
+                                            "H263",
+                                            "H264",
+                                            "VP8"
+                                        ],
+                                        "type": "string"
+                                    }
+                                },
+                                "name": "Codecs (gateways)",
+                                "type": "array"
+                            },
+                            "fax_option": {
+                                "default": "auto",
+                                "description": "The fax mode to option",
+                                "enum": [
+                                    "true",
+                                    "false",
+                                    "auto"
+                                ],
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "prefix": {
+                        "default": "+1",
+                        "description": "A string to prepend to the dialed number or capture group of the matching rule",
+                        "maxLength": 64,
+                        "minLength": 1,
+                        "name": "Prefix (gateways)",
+                        "type": "string"
+                    },
+                    "progress_timeout": {
+                        "description": "The progress timeout to apply to the device",
+                        "name": "Progress Timeout (gateways)",
+                        "type": "integer"
+                    },
+                    "suffix": {
+                        "description": "A string to append to the dialed number or capture group of the matching rule",
+                        "maxLength": 64,
+                        "minLength": 1,
+                        "name": "Suffix (gateways)",
+                        "type": "string"
+                    }
+                }
+            },
+            "type": "array"
+        },
+        "grace_period": {
+            "default": 5,
+            "description": "The amount of time, in seconds, to wait before starting another resource",
+            "maximum": 20,
+            "minimum": 3,
+            "name": "Grace Period",
+            "type": "integer"
+        },
+        "weight_cost": {
+            "default": 50,
+            "description": "A value between 0 and 100 that determines the order of resources when multiple can be used",
+            "maximum": 100,
+            "minimum": 0,
+            "name": "Weight Cost",
+            "type": "integer"
+        }
+    }
+}
