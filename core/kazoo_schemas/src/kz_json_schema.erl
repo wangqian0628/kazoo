@@ -126,7 +126,7 @@ add_defaults(JObj, SchemaJObj) ->
         _Ex:_Err ->
             lager:debug("exception getting schema default ~p : ~p", [_Ex, _Err]),
             JObj
-    end.    
+    end.
 
 -spec validate(kz_term:ne_binary() | kz_json:object(), kz_json:object()) ->
                       {'ok', kz_json:object()} |
